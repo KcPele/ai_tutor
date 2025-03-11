@@ -9,6 +9,7 @@ import {
   ChevronRight,
   FileText,
   Settings,
+  X,
 } from "lucide-react";
 import { generateChatCompletion, AITutorRole } from "@/utils/openai/chat";
 import { AIPDFUploaderComponent } from "@/components/teaching/pdf-uploader";
@@ -56,14 +57,14 @@ export default function TeachingPage() {
     const initialSystemMessage: ChatMessage = {
       id: uuidv4(),
       role: "system",
-      content: `PDF loaded: ${pdfData.title || pdfData.filename}. ${pdfData.numPages} pages.`,
+      content: `PDF loaded: ${pdfData.filename}`,
       timestamp: Date.now(),
     };
 
     const initialAIMessage: ChatMessage = {
       id: uuidv4(),
       role: "assistant",
-      content: `I've analyzed your document "${pdfData.title || pdfData.filename}". What would you like to learn about it? You can ask me specific questions, or I can help explain key concepts.`,
+      content: `I've analyzed your document "${pdfData.filename}". What would you like to learn about it? You can ask me specific questions, or I can help explain key concepts.`,
       timestamp: Date.now(),
     };
 
@@ -166,7 +167,7 @@ export default function TeachingPage() {
     const initialSystemMessage: ChatMessage = {
       id: uuidv4(),
       role: "system",
-      content: `PDF loaded: ${pdfInfo?.title || pdfInfo?.filename}. ${pdfInfo?.numPages} pages.`,
+      content: `PDF loaded: ${pdfInfo?.filename}`,
       timestamp: Date.now(),
     };
 
@@ -179,26 +180,28 @@ export default function TeachingPage() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background">
-      <div className="py-4 px-6 border-b flex justify-between items-center">
-        <h1 className="text-2xl font-bold">AI Teaching Assistant</h1>
+    <div className="flex flex-col h-[100vh] w-full overflow-hidden bg-background">
+      <div className="py-4 px-6 border-b flex justify-between items-center bg-slate-50 dark:bg-slate-900 shadow-sm">
+        <h1 className="text-2xl font-bold text-primary">
+          AI Teaching Assistant
+        </h1>
 
         <div className="flex items-center space-x-4">
           {pdfInfo && (
-            <div className="flex items-center text-sm text-muted-foreground">
-              <FileText className="h-4 w-4 mr-1" />
-              <span className="max-w-xs truncate">
-                {pdfInfo.title || pdfInfo.filename}
+            <div className="flex items-center text-sm bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full">
+              <FileText className="h-4 w-4 mr-2 text-primary" />
+              <span className="max-w-xs truncate font-medium">
+                {pdfInfo.filename}
               </span>
             </div>
           )}
 
-          <div className="flex items-center space-x-2">
-            <Settings className="h-4 w-4 text-muted-foreground" />
+          <div className="flex items-center space-x-2 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full">
+            <Settings className="h-4 w-4 text-primary" />
             <select
               value={tutorRole}
               onChange={handleRoleChange}
-              className="text-sm bg-background border rounded-md px-2 py-1"
+              className="text-sm bg-transparent border-none focus:ring-0 focus:outline-none"
               aria-label="Select AI tutor role"
             >
               <option value="general">General</option>
@@ -214,9 +217,11 @@ export default function TeachingPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Left panel - PDF uploader or viewer */}
         <div
-          className={`border-r flex flex-col ${isPdfCollapsed ? "w-12" : "w-1/3"}`}
+          className={`border-r flex flex-col ${
+            isPdfCollapsed ? "w-12" : "w-1/3"
+          } bg-white dark:bg-slate-950 shadow-md`}
         >
-          <div className="flex justify-between items-center p-3 border-b">
+          <div className="flex justify-between items-center p-3 border-b bg-slate-50 dark:bg-slate-900">
             <h2
               className={`font-medium ${isPdfCollapsed ? "hidden" : "block"}`}
             >
@@ -224,7 +229,7 @@ export default function TeachingPage() {
             </h2>
             <button
               onClick={() => setIsPdfCollapsed(!isPdfCollapsed)}
-              className="p-1 hover:bg-muted rounded-md"
+              className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md transition-colors"
               aria-label={
                 isPdfCollapsed
                   ? "Expand document panel"
@@ -236,25 +241,33 @@ export default function TeachingPage() {
           </div>
 
           <div
-            className={`flex-1 overflow-y-auto p-4 ${isPdfCollapsed ? "hidden" : "block"}`}
+            className={`flex-1 overflow-y-auto p-4 ${
+              isPdfCollapsed ? "hidden" : "block"
+            }`}
           >
             {!pdfInfo ? (
               <AIPDFUploaderComponent onPDFProcessed={handlePDFProcessed} />
             ) : (
               <div className="prose dark:prose-invert max-w-none">
-                <h3>{pdfInfo.title || pdfInfo.filename}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {pdfInfo.numPages} pages
-                </p>
-                <div className="mt-4 border rounded-md p-4 max-h-[60vh] overflow-y-auto">
-                  {pdfInfo.text.split("\n").map((paragraph, i) => (
-                    <p
-                      key={i}
-                      className={paragraph.trim() === "" ? "my-4" : ""}
-                    >
-                      {paragraph}
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-primary">
+                    {pdfInfo.filename}
+                  </h3>
+                  <button
+                    onClick={() => setPdfInfo(null)}
+                    className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 rounded-full transition-colors"
+                    aria-label="Remove document"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="mt-4 border rounded-md p-4 max-h-[60vh] overflow-y-auto bg-slate-50 dark:bg-slate-900/50">
+                  <div className="text-center my-4">
+                    <FileText className="h-12 w-12 mx-auto text-slate-400" />
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Document ready for analysis
                     </p>
-                  ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -264,9 +277,11 @@ export default function TeachingPage() {
         {/* Main content area */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Whiteboard */}
-          <div className="border-b h-1/2 overflow-hidden">
-            <div className="flex justify-between items-center p-3 border-b">
-              <h2 className="font-medium">Interactive Whiteboard</h2>
+          <div className="border-b h-1/2 overflow-hidden bg-white dark:bg-slate-950 shadow-md">
+            <div className="flex justify-between items-center p-3 border-b bg-slate-50 dark:bg-slate-900">
+              <h2 className="font-medium text-primary">
+                Interactive Whiteboard
+              </h2>
               <button
                 onClick={() => {
                   const whiteboardContainer = document.getElementById(
@@ -275,7 +290,7 @@ export default function TeachingPage() {
                   whiteboardContainer?.classList.toggle("h-1/2");
                   whiteboardContainer?.classList.toggle("h-3/4");
                 }}
-                className="p-1 hover:bg-muted rounded-md"
+                className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md transition-colors"
                 aria-label="Resize whiteboard"
               >
                 <ChevronUp className="h-4 w-4" />
@@ -290,7 +305,7 @@ export default function TeachingPage() {
           </div>
 
           {/* Chat interface */}
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden bg-white dark:bg-slate-950 shadow-md">
             <AIChatInterfaceComponent
               onSendMessage={handleSendMessage}
               messages={messages}
