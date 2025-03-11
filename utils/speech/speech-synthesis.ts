@@ -24,6 +24,12 @@ export class SpeechSynthesisService {
     volume: 1.0,
     lang: "en-US",
   };
+  private globalOptions: SpeechSynthesisOptions = {
+    rate: 1.0,
+    pitch: 1.0,
+    volume: 1.0,
+    lang: "en-US",
+  };
 
   private constructor() {
     if (typeof window !== "undefined") {
@@ -71,6 +77,21 @@ export class SpeechSynthesisService {
   }
 
   /**
+   * Set global speech options that will be applied to all speech
+   * @param options Global speech options
+   */
+  public setGlobalOptions(options: SpeechSynthesisOptions): void {
+    this.globalOptions = { ...this.globalOptions, ...options };
+  }
+
+  /**
+   * Get current global options
+   */
+  public getGlobalOptions(): SpeechSynthesisOptions {
+    return { ...this.globalOptions };
+  }
+
+  /**
    * Get the best available voice for a given language
    * @param lang Language code (e.g., 'en-US')
    */
@@ -90,6 +111,14 @@ export class SpeechSynthesisService {
   }
 
   /**
+   * Get a voice by name
+   * @param name Voice name
+   */
+  public getVoiceByName(name: string): SpeechSynthesisVoice | null {
+    return this.voices.find((voice) => voice.name === name) || null;
+  }
+
+  /**
    * Speak the provided text
    * @param text Text to speak
    * @param options Speech synthesis options
@@ -101,8 +130,12 @@ export class SpeechSynthesisService {
     // Cancel any ongoing speech
     this.stop();
 
-    // Create utterance with merged options
-    const mergedOptions = { ...this.defaultOptions, ...options };
+    // Create utterance with merged options (global options take precedence over defaults)
+    const mergedOptions = {
+      ...this.defaultOptions,
+      ...this.globalOptions,
+      ...options,
+    };
     const utterance = new SpeechSynthesisUtterance(text);
 
     // Set properties

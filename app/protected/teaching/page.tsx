@@ -44,6 +44,13 @@ export default function TeachingPage() {
   // Reference to whiteboard component for AI to use
   const whiteboardRef = useRef<WhiteboardRef>(null);
 
+  // Generate prompt based on PDF content and tutor role
+  const generatePrompt = (pdfText: string, role: AITutorRole): string => {
+    return `You are an AI tutor specialized in ${role}. 
+You're helping with a document titled "${pdfInfo?.title || pdfInfo?.filename}". 
+Document content: ${pdfText.substring(0, 2000)}...`;
+  };
+
   // Handle PDF processing
   const handlePDFProcessed = (pdfData: {
     text: string;
@@ -72,7 +79,10 @@ export default function TeachingPage() {
   };
 
   // Handle sending a message to the AI
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (
+    content: string,
+    useVoice: boolean = false
+  ) => {
     if (!pdfInfo) return;
 
     // Add user message to chat
@@ -98,65 +108,82 @@ export default function TeachingPage() {
       // Add context about the PDF
       const systemMessage = {
         role: "system" as const,
-        content: `You are an AI tutor specialized in ${tutorRole}. You're helping with a document titled "${pdfInfo.title || pdfInfo.filename}". Document content: ${pdfInfo.text.substring(0, 2000)}...`,
+        content: generatePrompt(pdfInfo.text, tutorRole),
       };
 
-      // Add the new user message
+      // Add user message
       apiMessages.push({
         role: "user" as const,
         content,
       });
 
-      // Get response from OpenAI
-      const aiResponse = await generateChatCompletion({
+      // Configure voice instruction if needed
+      let voiceInstruction = "";
+      if (useVoice) {
+        voiceInstruction = `
+Since the user is using voice mode, please optimize your response for spoken conversation:
+1. Keep your response concise and clear (under 150 words if possible).
+2. Use natural, conversational language.
+3. If you need to explain a complex concept, break it down into simple parts.
+4. If there is visual or mathematical content to explain, use the whiteboard by enclosing text in [writing]...[/writing] tags.
+`;
+      }
+
+      // Prepare the request body
+      const requestBody = {
+        model: "gpt-4o",
         messages: [systemMessage, ...apiMessages],
-        tutorRole,
+        max_tokens: 4000,
+        temperature: 0.7,
+        stream: false,
+        system_instruction: voiceInstruction,
+      };
+
+      // Set up the URL for the API call
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/api/chat`;
+
+      // Make the API call using fetch
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
       });
 
-      if (!aiResponse) throw new Error("Failed to get AI response");
+      if (!response.ok) throw new Error("Failed to get AI response");
+
+      // Parse the JSON response
+      const data = await response.json();
 
       // Add AI response to chat
       const aiMessage: ChatMessage = {
         id: uuidv4(),
         role: "assistant",
-        content: aiResponse,
+        content: data.content,
         timestamp: Date.now(),
       };
 
       setMessages((prev) => [...prev, aiMessage]);
 
       // Extract potential whiteboard commands from the AI response
-      // This is a simple approach - in a real app, you'd want a more robust way to handle this
-      if (whiteboardRef.current && aiResponse.includes("WHITEBOARD:")) {
-        const whiteboardCommands = aiResponse.match(
-          /WHITEBOARD:([^]*?)END_WHITEBOARD/g
-        );
+      if (whiteboardRef.current && data.content.includes("[writing]")) {
+        const regex = /\[writing\]([\s\S]*?)\[\/writing\]/g;
+        let match;
 
-        if (whiteboardCommands) {
-          whiteboardCommands.forEach((command) => {
-            const content = command
-              .replace("WHITEBOARD:", "")
-              .replace("END_WHITEBOARD", "")
-              .trim();
-
-            // Write the content on the whiteboard
-            // In a production app, you'd parse the command to determine position, style, etc.
-            whiteboardRef.current?.writeTextOnCanvas(content, 50, 50);
-          });
+        while ((match = regex.exec(data.content)) !== null) {
+          const writingContent = match[1].trim();
+          if (writingContent) {
+            whiteboardRef.current.writeTextOnCanvas(
+              writingContent,
+              100 + Math.random() * 200,
+              100 + Math.random() * 200
+            );
+          }
         }
       }
     } catch (error) {
       console.error("Error getting AI response:", error);
-
-      // Add error message
-      const errorMessage: ChatMessage = {
-        id: uuidv4(),
-        role: "assistant",
-        content: "Sorry, I encountered an error. Please try again.",
-        timestamp: Date.now(),
-      };
-
-      setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
@@ -313,6 +340,7 @@ export default function TeachingPage() {
               onClearChat={handleClearChat}
               tutorRole={tutorRole}
               className="h-full"
+              whiteboardRef={whiteboardRef}
             />
           </div>
         </div>

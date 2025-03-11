@@ -34,9 +34,10 @@ export function AIChatInterfaceComponent({
   whiteboardRef,
 }: AIChatInterfaceProps) {
   const [inputValue, setInputValue] = useState("");
-  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [autoListen, setAutoListen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const speechSynthesisRef = useRef<SpeechSynthesisService | null>(null);
@@ -111,11 +112,17 @@ export function AIChatInterfaceComponent({
       setIsSpeaking(true);
       speechSynthesisRef.current.speak(text, {
         onStart: () => setIsSpeaking(true),
-        onEnd: () => setIsSpeaking(false),
+        onEnd: () => {
+          setIsSpeaking(false);
+          // Auto-start listening after AI finishes speaking if autoListen is enabled
+          if (autoListen && voiceEnabled) {
+            setIsListening(true);
+          }
+        },
         onError: () => setIsSpeaking(false),
       });
     }
-  }, [messages, voiceEnabled, isLoading, whiteboardRef]);
+  }, [messages, voiceEnabled, isLoading, whiteboardRef, autoListen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,14 +171,18 @@ export function AIChatInterfaceComponent({
     return content;
   };
 
-  // Handle voice recognition result
+  // Handle speech recognized
   const handleSpeechRecognized = async (text: string) => {
     if (!text.trim() || isLoading) return;
 
     // Stop current speech synthesis if active
     if (speechSynthesisRef.current?.isSpeaking()) {
       speechSynthesisRef.current.stop();
+      setIsSpeaking(false);
     }
+
+    // Pause listening while processing the request
+    setIsListening(false);
 
     await onSendMessage(text, voiceEnabled);
   };
@@ -209,6 +220,11 @@ export function AIChatInterfaceComponent({
     };
   };
 
+  // Toggle auto-listen mode
+  const toggleAutoListen = () => {
+    setAutoListen(!autoListen);
+  };
+
   return (
     <div className={`flex flex-col h-full ${className}`}>
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -222,6 +238,17 @@ export function AIChatInterfaceComponent({
                 {tutorRole === "general" ? "various subjects" : tutorRole}. Ask
                 me any questions about your learning materials!
               </p>
+              {voiceEnabled && (
+                <div className="mt-2 p-2 bg-muted rounded-md text-sm">
+                  <p>Voice mode is enabled. You can:</p>
+                  <ul className="list-disc list-inside text-xs mt-1 space-y-1">
+                    <li>Click the microphone icon to start/stop speaking</li>
+                    <li>
+                      Enable auto-conversation mode for hands-free interaction
+                    </li>
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -280,30 +307,52 @@ export function AIChatInterfaceComponent({
       </div>
 
       <div className="border-t p-4">
-        <div className="flex justify-between items-center mb-2">
-          <AIVoiceInterfaceComponent
-            onSpeechRecognized={handleSpeechRecognized}
-            isListening={isListening}
-            isSpeaking={isSpeaking}
-            voiceEnabled={voiceEnabled}
-            setVoiceEnabled={setVoiceEnabled}
-            onStartSpeaking={() => setIsSpeaking(true)}
-            onStopSpeaking={() => setIsSpeaking(false)}
-          />
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex items-center gap-2">
+            <AIVoiceInterfaceComponent
+              onSpeechRecognized={handleSpeechRecognized}
+              isListening={isListening}
+              isSpeaking={isSpeaking}
+              voiceEnabled={voiceEnabled}
+              setVoiceEnabled={setVoiceEnabled}
+              onStartSpeaking={() => setIsSpeaking(true)}
+              onStopSpeaking={() => setIsSpeaking(false)}
+            />
 
-          {onClearChat && messages.length > 0 && (
-            <button
-              type="button"
-              onClick={onClearChat}
-              className="p-2 rounded-md bg-muted hover:bg-muted/80"
-              aria-label="Clear chat"
-            >
-              <Trash2 className="h-5 w-5" />
-            </button>
-          )}
-        </div>
+            {voiceEnabled && (
+              <div
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs cursor-pointer ${
+                  autoListen
+                    ? "bg-primary/20 text-primary"
+                    : "bg-muted text-muted-foreground"
+                }`}
+                onClick={toggleAutoListen}
+                title={
+                  autoListen
+                    ? "Disable auto-conversation"
+                    : "Enable auto-conversation"
+                }
+              >
+                <span
+                  className={`w-2.5 h-2.5 rounded-full ${autoListen ? "bg-primary animate-pulse" : "bg-muted-foreground"}`}
+                ></span>
+                Auto
+              </div>
+            )}
 
-        <form onSubmit={handleSubmit} className="flex items-end space-x-2">
+            {onClearChat && (
+              <button
+                type="button"
+                onClick={onClearChat}
+                className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
+                title="Clear chat history"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span className="hidden sm:inline">Clear</span>
+              </button>
+            )}
+          </div>
+
           <div className="relative flex-1">
             <textarea
               ref={textareaRef}
