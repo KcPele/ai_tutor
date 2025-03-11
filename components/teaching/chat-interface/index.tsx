@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import { SendHorizonal, User, Bot, Trash2 } from "lucide-react";
 import { AITutorRole } from "@/utils/openai/chat";
+import { AIVoiceInterfaceComponent } from "../voice-interface";
+import { SpeechSynthesisService } from "@/utils/speech/speech-synthesis";
 
 // Message types
 export interface ChatMessage {
@@ -13,12 +15,13 @@ export interface ChatMessage {
 }
 
 interface AIChatInterfaceProps {
-  onSendMessage: (message: string) => Promise<void>;
+  onSendMessage: (message: string, useVoice?: boolean) => Promise<void>;
   messages: ChatMessage[];
   isLoading?: boolean;
   onClearChat?: () => void;
   tutorRole?: AITutorRole;
   className?: string;
+  whiteboardRef?: React.RefObject<any>;
 }
 
 export function AIChatInterfaceComponent({
@@ -28,10 +31,28 @@ export function AIChatInterfaceComponent({
   onClearChat,
   tutorRole = "general",
   className = "",
+  whiteboardRef,
 }: AIChatInterfaceProps) {
   const [inputValue, setInputValue] = useState("");
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const speechSynthesisRef = useRef<SpeechSynthesisService | null>(null);
+
+  // Initialize speech synthesis
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      speechSynthesisRef.current = SpeechSynthesisService.getInstance();
+    }
+    return () => {
+      // Clean up speech synthesis
+      if (speechSynthesisRef.current?.isSpeaking()) {
+        speechSynthesisRef.current.stop();
+      }
+    };
+  }, []);
 
   // Auto-scroll to the latest message
   useEffect(() => {
@@ -49,6 +70,53 @@ export function AIChatInterfaceComponent({
     }
   }, [inputValue]);
 
+  // Speak the latest AI message when voiceEnabled is true
+  useEffect(() => {
+    const latestMessage = messages[messages.length - 1];
+
+    if (
+      voiceEnabled &&
+      latestMessage &&
+      latestMessage.role === "assistant" &&
+      speechSynthesisRef.current &&
+      !isLoading
+    ) {
+      // Parse the message to extract any writing instructions
+      const { text, writingInstructions } = parseAIResponseForVoice(
+        latestMessage.content
+      );
+
+      // Process writing instructions if whiteboard reference is available
+      if (whiteboardRef?.current && writingInstructions.length > 0) {
+        writingInstructions.forEach((instruction, index) => {
+          // Stagger writing on whiteboard to make it more natural
+          setTimeout(() => {
+            // Calculate a reasonable position if not specified
+            const position = instruction.position || {
+              x: 100 + ((index * 50) % 400),
+              y: 100 + Math.floor(index / 8) * 40,
+            };
+
+            whiteboardRef.current.writeTextOnCanvas(
+              instruction.content,
+              position.x,
+              position.y,
+              { animationSpeed: 20 }
+            );
+          }, index * 500); // Stagger by 500ms
+        });
+      }
+
+      // Speak the clean text
+      setIsSpeaking(true);
+      speechSynthesisRef.current.speak(text, {
+        onStart: () => setIsSpeaking(true),
+        onEnd: () => setIsSpeaking(false),
+        onError: () => setIsSpeaking(false),
+      });
+    }
+  }, [messages, voiceEnabled, isLoading, whiteboardRef]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -57,7 +125,7 @@ export function AIChatInterfaceComponent({
     const message = inputValue.trim();
     setInputValue("");
 
-    await onSendMessage(message);
+    await onSendMessage(message, voiceEnabled);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -90,7 +158,55 @@ export function AIChatInterfaceComponent({
     // For line breaks
     content = content.replace(/\n/g, "<br />");
 
+    // Remove [writing]...[/writing] markers if present
+    content = content.replace(/\[writing\]([\s\S]*?)\[\/writing\]/g, "");
+
     return content;
+  };
+
+  // Handle voice recognition result
+  const handleSpeechRecognized = async (text: string) => {
+    if (!text.trim() || isLoading) return;
+
+    // Stop current speech synthesis if active
+    if (speechSynthesisRef.current?.isSpeaking()) {
+      speechSynthesisRef.current.stop();
+    }
+
+    await onSendMessage(text, voiceEnabled);
+  };
+
+  // Parse AI response to extract whiteboard writing instructions
+  const parseAIResponseForVoice = (response: string) => {
+    const writingInstructions: {
+      content: string;
+      position?: { x: number; y: number };
+    }[] = [];
+
+    // Find all writing instructions
+    const writingPattern = /\[writing\]([\s\S]*?)\[\/writing\]/;
+    let cleanedText = response;
+    let match;
+
+    // Keep finding matches until there are no more
+    while ((match = writingPattern.exec(cleanedText)) !== null) {
+      const [fullMatch, content] = match;
+
+      writingInstructions.push({
+        content: content.trim(),
+      });
+
+      // Remove this writing instruction and continue
+      cleanedText = cleanedText.replace(fullMatch, "");
+    }
+
+    // Clean up any double spaces or new lines caused by removing instructions
+    cleanedText = cleanedText.replace(/\n\s*\n/g, "\n\n").trim();
+
+    return {
+      text: cleanedText,
+      writingInstructions,
+    };
   };
 
   return (
@@ -164,6 +280,29 @@ export function AIChatInterfaceComponent({
       </div>
 
       <div className="border-t p-4">
+        <div className="flex justify-between items-center mb-2">
+          <AIVoiceInterfaceComponent
+            onSpeechRecognized={handleSpeechRecognized}
+            isListening={isListening}
+            isSpeaking={isSpeaking}
+            voiceEnabled={voiceEnabled}
+            setVoiceEnabled={setVoiceEnabled}
+            onStartSpeaking={() => setIsSpeaking(true)}
+            onStopSpeaking={() => setIsSpeaking(false)}
+          />
+
+          {onClearChat && messages.length > 0 && (
+            <button
+              type="button"
+              onClick={onClearChat}
+              className="p-2 rounded-md bg-muted hover:bg-muted/80"
+              aria-label="Clear chat"
+            >
+              <Trash2 className="h-5 w-5" />
+            </button>
+          )}
+        </div>
+
         <form onSubmit={handleSubmit} className="flex items-end space-x-2">
           <div className="relative flex-1">
             <textarea
@@ -186,17 +325,6 @@ export function AIChatInterfaceComponent({
           >
             <SendHorizonal className="h-5 w-5" />
           </button>
-
-          {onClearChat && messages.length > 0 && (
-            <button
-              type="button"
-              onClick={onClearChat}
-              className="p-2 rounded-md bg-muted hover:bg-muted/80"
-              aria-label="Clear chat"
-            >
-              <Trash2 className="h-5 w-5" />
-            </button>
-          )}
         </form>
       </div>
     </div>

@@ -12,6 +12,7 @@ interface ChatOptions {
   model?: string;
   temperature?: number;
   tutorRole?: AITutorRole;
+  useVoice?: boolean;
 }
 
 /**
@@ -22,6 +23,7 @@ export async function generateChatCompletion({
   model = "gpt-4o",
   temperature = 0.7,
   tutorRole = "general",
+  useVoice = false,
 }: ChatOptions): Promise<string | null> {
   try {
     // Call our API endpoint instead of OpenAI directly
@@ -35,6 +37,7 @@ export async function generateChatCompletion({
         model,
         temperature,
         tutorRole,
+        useVoice,
       }),
     });
 
@@ -49,6 +52,50 @@ export async function generateChatCompletion({
     console.error("Error generating chat completion:", error);
     throw new Error("Failed to generate AI response");
   }
+}
+
+/**
+ * Parse AI response text to extract any whiteboard writing instructions
+ * @param response The AI response text
+ * @returns An object with parsed text and writing instructions
+ */
+export function parseAIResponse(response: string): {
+  text: string;
+  writingInstructions: {
+    content: string;
+    position?: { x: number; y: number };
+  }[];
+} {
+  const writingInstructions: {
+    content: string;
+    position?: { x: number; y: number };
+  }[] = [];
+
+  // Use a simple approach without using the 's' flag which requires ES2018+
+  const writingPattern = /\[writing\]([\s\S]*?)\[\/writing\]/;
+  let cleanedText = response;
+  let match;
+
+  // Keep finding matches until there are no more
+  while ((match = writingPattern.exec(cleanedText)) !== null) {
+    const [fullMatch, content] = match;
+
+    writingInstructions.push({
+      content: content.trim(),
+      // Position will be assigned by the whiteboard component
+    });
+
+    // Remove this writing instruction and continue
+    cleanedText = cleanedText.replace(fullMatch, "");
+  }
+
+  // Clean up any double spaces or new lines caused by removing instructions
+  cleanedText = cleanedText.replace(/\n\s*\n/g, "\n\n").trim();
+
+  return {
+    text: cleanedText,
+    writingInstructions,
+  };
 }
 
 /**

@@ -131,8 +131,8 @@ export default function LandingHero() {
               <Image
                 src={
                   isDark
-                    ? "https://images.unsplash.com/photo-1581092160607-ee22621dd758?q=80&w=800&auto=format&fit=crop"
-                    : "https://images.unsplash.com/photo-1581092160562-2bcce9208e9e?q=80&w=800&auto=format&fit=crop"
+                    ? "https://images.unsplash.com/photo-1509062522246-3755977927d7?q=80&w=1236&auto=format&fit=crop"
+                    : "https://images.unsplash.com/photo-1606326608606-aa0b62935f2b?q=80&w=1470&auto=format&fit=crop"
                 }
                 alt="AI Teaching Interface"
                 fill
