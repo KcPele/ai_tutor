@@ -1,7 +1,8 @@
 import FetchDataSteps from "@/components/tutorial/fetch-data-steps";
 import { createClient } from "@/utils/supabase/server";
-import { InfoIcon } from "lucide-react";
+import { InfoIcon, BookOpen } from "lucide-react";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 export default async function ProtectedPage() {
   const supabase = await createClient();
@@ -23,12 +24,33 @@ export default async function ProtectedPage() {
           user
         </div>
       </div>
+
+      <div className="flex flex-col gap-8">
+        <h2 className="font-bold text-2xl">Welcome to the AI Teaching App</h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Link
+            href="/protected/teaching"
+            className="flex flex-col items-center justify-center p-6 border rounded-lg hover:bg-accent/50 transition-colors"
+          >
+            <BookOpen className="h-12 w-12 text-primary mb-4" />
+            <h3 className="text-xl font-semibold mb-2">Start Learning</h3>
+            <p className="text-center text-muted-foreground">
+              Upload PDF materials and learn with AI assistance
+            </p>
+          </Link>
+
+          {/* Additional app features can be added here as cards */}
+        </div>
+      </div>
+
       <div className="flex flex-col gap-2 items-start">
         <h2 className="font-bold text-2xl mb-4">Your user details</h2>
         <pre className="text-xs font-mono p-3 rounded border max-h-32 overflow-auto">
           {JSON.stringify(user, null, 2)}
         </pre>
       </div>
+
       <div>
         <h2 className="font-bold text-2xl mb-4">Next steps</h2>
         <FetchDataSteps />

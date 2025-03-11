@@ -17,6 +17,69 @@
 </p>
 <br/>
 
+# AI Teaching App
+
+The AI Teaching App is an interactive learning platform that leverages AI models to teach users based on uploaded materials. The app features a real-time whiteboard for enhanced learning and provides a conversational interface for engaging interactions.
+
+## Features
+
+- **Material Upload**: Upload PDFs, which the AI processes to generate teaching content
+- **AI Tutor**: Interact with an AI tutor specialized in various subjects (math, science, history, etc.)
+- **Interactive Whiteboard**: AI dynamically writes on a whiteboard to explain concepts
+- **Conversational Learning**: Chat with the AI to ask questions and get explanations in real time
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v18 or later)
+- Bun (v1.0 or later)
+- Supabase account
+- OpenAI API key
+
+### Environment Setup
+
+1. Clone the repository
+2. Copy `.env.example` to `.env` and fill in your Supabase and OpenAI API credentials:
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=your-project-url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+   OPENAI_API_KEY=your-openai-api-key
+   ```
+
+### Installation
+
+```bash
+# Install dependencies
+bun install
+
+# Run the development server
+bun run dev
+```
+
+### Usage
+
+1. Sign up or sign in to your account
+2. Navigate to the Teaching page from the dashboard
+3. Upload a PDF document you want to learn about
+4. Select an AI tutor role that best matches the subject matter
+5. Ask questions about the document's content
+6. The AI will respond and use the whiteboard to illustrate concepts
+
+## Tech Stack
+
+- **AI Model**: ChatGPT (via OpenAI API)
+- **Frontend**: Next.js
+- **Styling**: Tailwind CSS
+- **UI Components**: ShadCN/UI
+- **Authentication**: Supabase
+- **PDF Processing**: PDF.js
+- **Whiteboard**: Fabric.js
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
 ## Features
 
 - Works across the entire [Next.js](https://nextjs.org) stack

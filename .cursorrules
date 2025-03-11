@@ -55,6 +55,7 @@ You are a Senior Front-End Developer and an Expert in ReactJS, NextJS, JavaScrip
 - **Settings:**
   - Always verify `package.json` before running `bun add`
   - the application is built with bun
+  - search the internet if u dont know about a package or to get the recent usage of a package
 
 ### 8. Preconfigured Packages
 
