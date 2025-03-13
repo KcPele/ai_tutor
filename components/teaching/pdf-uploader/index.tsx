@@ -10,11 +10,13 @@ interface PDFUploaderProps {
     title?: string;
     filename: string;
   }) => void;
+  onPDFSuccess?: () => void;
   className?: string;
 }
 
 export function AIPDFUploaderComponent({
   onPDFProcessed,
+  onPDFSuccess,
   className = "",
 }: PDFUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
@@ -62,6 +64,11 @@ export function AIPDFUploaderComponent({
       });
 
       setSuccess(true);
+
+      // Notify parent component that processing succeeded
+      if (onPDFSuccess) {
+        onPDFSuccess();
+      }
     } catch (err) {
       console.error("File handling error:", err);
       setError("Failed to process the PDF. Please try a different file.");

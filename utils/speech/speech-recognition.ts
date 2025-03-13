@@ -96,17 +96,44 @@ export class SpeechRecognitionService {
       const signal = controller.signal;
 
       // Set a timeout
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // Increased timeout to 5 seconds
 
-      // Use Google as a reliable service to test connectivity
-      await fetch("https://www.google.com/generate_204", {
-        method: "HEAD",
-        mode: "no-cors",
-        signal,
-      });
+      // Try multiple reliable services in case one is blocked
+      const connectivityEndpoints = [
+        "https://www.google.com/generate_204",
+        "https://www.cloudflare.com/cdn-cgi/trace",
+        "https://httpbin.org/status/200",
+      ];
+
+      let connected = false;
+
+      for (const endpoint of connectivityEndpoints) {
+        if (connected) break;
+
+        try {
+          await fetch(endpoint, {
+            method: "HEAD",
+            mode: "no-cors",
+            signal,
+            cache: "no-store", // Prevent caching
+          });
+          connected = true;
+        } catch (err) {
+          console.warn(
+            `Connectivity check to ${endpoint} failed, trying next...`
+          );
+        }
+      }
 
       clearTimeout(timeoutId);
-      console.log("Network connectivity confirmed for speech recognition");
+
+      if (connected) {
+        console.log("Network connectivity confirmed for speech recognition");
+      } else {
+        console.warn(
+          "All connectivity checks failed. Speech recognition might have issues."
+        );
+      }
     } catch (error: any) {
       if (error.name === "AbortError") {
         console.warn(
@@ -230,105 +257,85 @@ export class SpeechRecognitionService {
 
   /**
    * Start listening for speech
-   * @param options Speech recognition options
+   * @param options Recognition options
+   * @returns Whether listening was successfully started
    */
   public startListening(options: SpeechRecognitionOptions = {}): boolean {
     if (!this.recognition) return false;
-    if (this.isListening) this.stopListening();
 
-    // Reset network retry counter when starting fresh
+    // Reset network retry counter on new listening session
     this.resetNetworkRetryCount();
 
-    const mergedOptions = { ...this.defaultOptions, ...options };
-    this.configureRecognition(mergedOptions);
-
-    // Check for online status before attempting to start
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      if (mergedOptions.onError) {
-        mergedOptions.onError({
-          type: "network",
-          message:
-            "You appear to be offline. Speech recognition requires an internet connection.",
-          isFinal: true,
-        });
-      }
-      return false;
-    }
+    // Configure with new options
+    this.configureRecognition({ ...this.defaultOptions, ...options });
 
     // Set up event handlers
     this.recognition.onstart = () => {
       this.isListening = true;
-      if (mergedOptions.onStart) mergedOptions.onStart();
+      if (this.callbacks?.onStart) this.callbacks.onStart();
     };
 
     this.recognition.onend = () => {
-      // Only set isListening to false if we're not in the middle of a network retry
+      // Only mark as not listening if we're not in a retry state
       if (this.networkRetryCount === 0) {
         this.isListening = false;
-        if (mergedOptions.onEnd) mergedOptions.onEnd();
-      }
-
-      // Try to restart recognition if continuous is enabled and not stopping due to network issues
-      if (
-        this.isListening &&
-        mergedOptions.continuous &&
-        this.networkRetryCount === 0
-      ) {
-        try {
-          this.recognition.start();
-        } catch (error) {
-          console.error("Error restarting speech recognition:", error);
-          this.isListening = false;
-          if (mergedOptions.onEnd) mergedOptions.onEnd();
-        }
+        if (this.callbacks?.onEnd) this.callbacks.onEnd();
       }
     };
 
-    this.recognition.onerror = (event: any) => {
-      // Use the enhanced error handler we implemented
-      this.handleError(event);
-    };
+    this.recognition.onerror = this.handleError.bind(this);
 
     this.recognition.onresult = (event: any) => {
       // Reset network retry counter on successful results
       this.resetNetworkRetryCount();
 
-      // Get the latest result
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        const transcript = result[0].transcript.trim();
-
-        if (mergedOptions.onResult) {
-          mergedOptions.onResult(transcript, result.isFinal);
-        }
+      // Process results
+      if (this.callbacks?.onResult && event.results) {
+        const result = event.results[event.resultIndex];
+        const transcript = result[0].transcript;
+        const isFinal = result.isFinal;
+        this.callbacks.onResult(transcript, isFinal);
       }
     };
 
-    // Start recognition
+    // Try to start recognition
     try {
-      this.recognition.start();
-      return true;
-    } catch (error) {
-      console.error("Error starting speech recognition", error);
-
-      // Provide feedback about the error
-      if (mergedOptions.onError) {
-        if (error instanceof DOMException && error.name === "NotAllowedError") {
-          mergedOptions.onError({
-            type: "permission",
-            message:
-              "Microphone permission was denied. Please allow microphone access and try again.",
-            isFinal: true,
-          });
-        } else {
-          mergedOptions.onError({
-            type: "unknown",
-            message: "Could not start speech recognition. Please try again.",
-            isFinal: true,
-          });
-        }
+      // Check if already listening
+      if (this.isListening) {
+        this.stopListening();
       }
 
+      // Add a small delay to ensure previous session is fully stopped
+      setTimeout(() => {
+        try {
+          this.recognition.start();
+        } catch (e) {
+          console.error("Failed to start speech recognition", e);
+          this.isListening = false;
+          if (this.callbacks?.onError) {
+            this.callbacks.onError({
+              type: "start_error",
+              message: "Failed to start speech recognition. Please try again.",
+              isFinal: true,
+              isRetrying: false,
+            });
+          }
+          return false;
+        }
+      }, 100);
+
+      return true;
+    } catch (e) {
+      console.error("Failed to start speech recognition", e);
+      this.isListening = false;
+      if (this.callbacks?.onError) {
+        this.callbacks.onError({
+          type: "start_error",
+          message: "Failed to start speech recognition. Please try again.",
+          isFinal: true,
+          isRetrying: false,
+        });
+      }
       return false;
     }
   }
@@ -468,25 +475,31 @@ export class SpeechRecognitionService {
       `Retrying speech recognition after network error (attempt ${this.networkRetryCount}/${this.maxNetworkRetries})`
     );
 
-    // Start recognition with same options
-    try {
-      this.recognition.start();
-    } catch (e) {
-      console.error(
-        "Failed to restart speech recognition after network error",
-        e
-      );
+    // First, completely recreate the recognition instance to clear any potential issues
+    this.initializeRecognition();
 
-      // Final failure - report to callback
-      if (this.callbacks?.onError) {
-        this.callbacks.onError({
-          type: "network",
-          message:
-            "Failed to restart speech recognition. Please try again later.",
-          isFinal: true,
-          isRetrying: false,
-        });
+    // Short delay before restarting to allow any pending operations to complete
+    setTimeout(() => {
+      // Start recognition with same options
+      try {
+        this.recognition.start();
+      } catch (e) {
+        console.error(
+          "Failed to restart speech recognition after network error",
+          e
+        );
+
+        // Final failure - report to callback
+        if (this.callbacks?.onError) {
+          this.callbacks.onError({
+            type: "network",
+            message:
+              "Unable to restart speech recognition. Please refresh the page and try again.",
+            isFinal: true,
+            isRetrying: false,
+          });
+        }
       }
-    }
+    }, 500);
   }
 }

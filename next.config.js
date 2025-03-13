@@ -14,6 +14,10 @@ const nextConfig = {
 
     return config;
   },
+  // Configure allowed image domains
+  images: {
+    domains: ["images.unsplash.com"],
+  },
   // Add any other Next.js config options here
 };
 

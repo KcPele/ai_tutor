@@ -41,6 +41,12 @@ export default function TeachingPage() {
   // State for UI
   const [isPdfCollapsed, setIsPdfCollapsed] = useState(false);
 
+  // State for voice
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
   // Reference to whiteboard component for AI to use
   const whiteboardRef = useRef<WhiteboardRef>(null);
 
@@ -60,6 +66,10 @@ Document content: ${pdfText.substring(0, 2000)}...`;
   }) => {
     setPdfInfo(pdfData);
 
+    // Set voice enabled to ensure automatic conversation
+    setVoiceEnabled(true);
+    setVoiceError(null);
+
     // Generate initial AI message based on PDF content
     const initialSystemMessage: ChatMessage = {
       id: uuidv4(),
@@ -78,10 +88,34 @@ Document content: ${pdfText.substring(0, 2000)}...`;
     setMessages([initialSystemMessage, initialAIMessage]);
   };
 
+  // Handle voice errors
+  const handleVoiceError = (error: {
+    type: string;
+    message: string;
+    isFinal: boolean;
+    isRetrying?: boolean;
+  }) => {
+    setVoiceError(error.message);
+
+    // If we have a final network error, show a helpful message
+    if (error.type === "network" && error.isFinal && !error.isRetrying) {
+      // Add a system message to inform the user
+      const systemErrorMessage: ChatMessage = {
+        id: uuidv4(),
+        role: "system",
+        content:
+          "Voice recognition is having trouble connecting. You can continue using text input instead.",
+        timestamp: Date.now(),
+      };
+
+      setMessages((prev) => [...prev, systemErrorMessage]);
+    }
+  };
+
   // Handle sending a message to the AI
   const handleSendMessage = async (
     content: string,
-    useVoice: boolean = false
+    useVoice: boolean = voiceEnabled
   ) => {
     if (!pdfInfo) return;
 
@@ -201,146 +235,100 @@ Since the user is using voice mode, please optimize your response for spoken con
     setMessages([initialSystemMessage]);
   };
 
-  // Set the tutor role
-  const handleRoleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    setTutorRole(event.target.value as AITutorRole);
-  };
-
   return (
-    <div className="flex flex-col h-[100vh] w-full overflow-hidden bg-background">
-      <div className="py-4 px-6 border-b flex justify-between items-center bg-slate-50 dark:bg-slate-900 shadow-sm">
-        <h1 className="text-2xl font-bold text-primary">
-          AI Teaching Assistant
-        </h1>
-
-        <div className="flex items-center space-x-4">
-          {pdfInfo && (
-            <div className="flex items-center text-sm bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full">
-              <FileText className="h-4 w-4 mr-2 text-primary" />
-              <span className="max-w-xs truncate font-medium">
-                {pdfInfo.filename}
-              </span>
-            </div>
-          )}
-
-          <div className="flex items-center space-x-2 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full">
-            <Settings className="h-4 w-4 text-primary" />
+    <div className="flex flex-col h-screen bg-background">
+      {/* Header */}
+      <header className="p-4 border-b">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">AI Teaching Assistant</h1>
+          <div className="flex items-center space-x-2">
+            {/* Tutor role selector */}
             <select
               value={tutorRole}
-              onChange={handleRoleChange}
-              className="text-sm bg-transparent border-none focus:ring-0 focus:outline-none"
-              aria-label="Select AI tutor role"
+              onChange={(e) => setTutorRole(e.target.value as AITutorRole)}
+              className="p-2 border rounded"
             >
               <option value="general">General</option>
-              <option value="math">Math</option>
+              <option value="math">Mathematics</option>
               <option value="science">Science</option>
               <option value="history">History</option>
               <option value="language">Language</option>
             </select>
           </div>
         </div>
-      </div>
+      </header>
 
+      {/* Main content */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left panel - PDF uploader or viewer */}
+        {/* PDF section */}
         <div
-          className={`border-r flex flex-col ${
+          className={`border-r ${
             isPdfCollapsed ? "w-12" : "w-1/3"
-          } bg-white dark:bg-slate-950 shadow-md`}
+          } flex flex-col transition-all duration-300 ease-in-out`}
         >
-          <div className="flex justify-between items-center p-3 border-b bg-slate-50 dark:bg-slate-900">
-            <h2
-              className={`font-medium ${isPdfCollapsed ? "hidden" : "block"}`}
-            >
-              {pdfInfo ? "Document" : "Upload Document"}
+          <div className="flex justify-between items-center p-2 border-b">
+            <h2 className={`font-semibold ${isPdfCollapsed ? "hidden" : ""}`}>
+              Document
             </h2>
             <button
               onClick={() => setIsPdfCollapsed(!isPdfCollapsed)}
-              className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md transition-colors"
-              aria-label={
-                isPdfCollapsed
-                  ? "Expand document panel"
-                  : "Collapse document panel"
-              }
+              className="p-1 rounded hover:bg-muted"
             >
               {isPdfCollapsed ? <ChevronRight /> : <ChevronLeft />}
             </button>
           </div>
 
           <div
-            className={`flex-1 overflow-y-auto p-4 ${
-              isPdfCollapsed ? "hidden" : "block"
-            }`}
+            className={`flex-1 overflow-auto ${isPdfCollapsed ? "hidden" : ""}`}
           >
-            {!pdfInfo ? (
-              <AIPDFUploaderComponent onPDFProcessed={handlePDFProcessed} />
+            {pdfInfo ? (
+              <div className="p-4">
+                <div className="flex items-center mb-4">
+                  <FileText className="mr-2" />
+                  <span className="font-medium">{pdfInfo.filename}</span>
+                </div>
+                <div className="whitespace-pre-wrap text-sm border p-4 rounded bg-muted/50 max-h-[calc(100vh-12rem)] overflow-auto">
+                  {pdfInfo.text.substring(0, 2000)}
+                  {pdfInfo.text.length > 2000 && "..."}
+                </div>
+              </div>
             ) : (
-              <div className="prose dark:prose-invert max-w-none">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-primary">
-                    {pdfInfo.filename}
-                  </h3>
-                  <button
-                    onClick={() => setPdfInfo(null)}
-                    className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 rounded-full transition-colors"
-                    aria-label="Remove document"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="mt-4 border rounded-md p-4 max-h-[60vh] overflow-y-auto bg-slate-50 dark:bg-slate-900/50">
-                  <div className="text-center my-4">
-                    <FileText className="h-12 w-12 mx-auto text-slate-400" />
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Document ready for analysis
-                    </p>
-                  </div>
-                </div>
+              <div className="p-4">
+                <AIPDFUploaderComponent
+                  onPDFProcessed={handlePDFProcessed}
+                  onPDFSuccess={() => {
+                    // Auto-enable voice when PDF is uploaded
+                    setVoiceEnabled(true);
+                    setVoiceError(null);
+                  }}
+                />
               </div>
             )}
           </div>
         </div>
 
-        {/* Main content area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Chat and whiteboard section */}
+        <div className="flex-1 flex flex-col">
           {/* Whiteboard */}
-          <div className="border-b h-1/2 overflow-hidden bg-white dark:bg-slate-950 shadow-md">
-            <div className="flex justify-between items-center p-3 border-b bg-slate-50 dark:bg-slate-900">
-              <h2 className="font-medium text-primary">
-                Interactive Whiteboard
-              </h2>
-              <button
-                onClick={() => {
-                  const whiteboardContainer = document.getElementById(
-                    "whiteboard-container"
-                  );
-                  whiteboardContainer?.classList.toggle("h-1/2");
-                  whiteboardContainer?.classList.toggle("h-3/4");
-                }}
-                className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md transition-colors"
-                aria-label="Resize whiteboard"
-              >
-                <ChevronUp className="h-4 w-4" />
-              </button>
-            </div>
-            <div
-              id="whiteboard-container"
-              className="h-full overflow-hidden p-4"
-            >
-              <AIWhiteboardComponent ref={whiteboardRef} className="h-full" />
-            </div>
+          <div className="h-1/2 border-b overflow-hidden">
+            <AIWhiteboardComponent ref={whiteboardRef} />
           </div>
 
           {/* Chat interface */}
-          <div className="flex-1 overflow-hidden bg-white dark:bg-slate-950 shadow-md">
+          <div className="flex-1 flex flex-col">
             <AIChatInterfaceComponent
-              onSendMessage={handleSendMessage}
               messages={messages}
-              isLoading={isLoading}
+              onSendMessage={handleSendMessage}
               onClearChat={handleClearChat}
-              tutorRole={tutorRole}
-              className="h-full"
-              whiteboardRef={whiteboardRef}
+              isLoading={isLoading}
+              voiceEnabled={voiceEnabled}
+              setVoiceEnabled={setVoiceEnabled}
+              isListening={isListening}
+              setIsListening={setIsListening}
+              isSpeaking={isSpeaking}
+              setIsSpeaking={setIsSpeaking}
+              onVoiceError={handleVoiceError}
+              voiceError={voiceError}
             />
           </div>
         </div>

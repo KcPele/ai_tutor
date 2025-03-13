@@ -55,6 +55,9 @@ export function AIVoiceInterfaceComponent({
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== "undefined" ? navigator.onLine : true
   );
+  const [autoConversation, setAutoConversation] = useState(true);
+  const [networkErrorCount, setNetworkErrorCount] = useState(0);
+  const maxNetworkRetries = 3;
 
   const speechRecognitionRef = useRef<SpeechRecognitionService | null>(null);
   const speechSynthesisRef = useRef<SpeechSynthesisService | null>(null);
@@ -120,6 +123,8 @@ export function AIVoiceInterfaceComponent({
         setIsLocalListening(true);
         setInterimResult("");
         setIsRetrying(false);
+        // Reset network error count on successful start
+        setNetworkErrorCount(0);
       },
       onEnd: () => {
         // Only update UI if we're not in a retry state
@@ -130,11 +135,38 @@ export function AIVoiceInterfaceComponent({
       onError: (error) => {
         console.error("Speech recognition error", error);
 
-        // Handle retry status specially
-        if (error.isRetrying) {
-          setIsRetrying(true);
-          setErrorMessage(error.message);
-          return;
+        // Handle network errors specifically
+        if (error.type === "network") {
+          // Increment network error count
+          setNetworkErrorCount((prev) => prev + 1);
+
+          // Handle retry status specially
+          if (error.isRetrying) {
+            setIsRetrying(true);
+            setErrorMessage(error.message);
+            return;
+          }
+
+          // If we've exceeded max retries, suggest fallback options
+          if (networkErrorCount >= maxNetworkRetries) {
+            setErrorMessage(
+              "Voice recognition is having trouble connecting. You can try refreshing the page or using text input instead."
+            );
+            // Disable voice mode after too many failures
+            if (networkErrorCount >= maxNetworkRetries + 2) {
+              setVoiceEnabled(false);
+              setErrorMessage(
+                "Voice mode has been temporarily disabled due to connection issues. You can re-enable it using the toggle."
+              );
+            }
+          }
+        } else {
+          // Handle retry status for other errors
+          if (error.isRetrying) {
+            setIsRetrying(true);
+            setErrorMessage(error.message);
+            return;
+          }
         }
 
         // Handle final error
@@ -148,25 +180,17 @@ export function AIVoiceInterfaceComponent({
         // Display the error message to the user
         if (error.message) {
           setErrorMessage(error.message);
-          // Clear error message after a longer time for network errors
-          setTimeout(
-            () => setErrorMessage(null),
-            error.type === "network" ? 8000 : 5000
-          );
         }
       },
       onResult: (text, isFinal) => {
-        setIsRetrying(false);
-        if (isFinal) {
-          setInterimResult("");
-          // Only process if we have text and aren't already processing
-          if (text && !isProcessing) {
-            processRecognizedSpeech(text);
-          }
-        } else {
+        if (!isFinal) {
           setInterimResult(text);
+        } else {
+          setInterimResult("");
+          processRecognizedSpeech(text);
         }
       },
+      maxNetworkRetries: maxNetworkRetries,
     });
   };
 
@@ -237,17 +261,70 @@ export function AIVoiceInterfaceComponent({
 
   // Add event listeners for online/offline status
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    const handleOnline = () => {
+      setIsOnline(true);
+      setErrorMessage(
+        "Connection restored. Voice recognition should work now."
+      );
+      // Try to restart listening if it was active before
+      if (voiceEnabled && !isLocalListening && !isSpeaking) {
+        setTimeout(() => startListening(), 1000);
+      }
+    };
 
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
+    const handleOffline = () => {
+      setIsOnline(false);
+      setErrorMessage(
+        "Your device appears to be offline. Voice recognition requires an internet connection."
+      );
+      stopListening();
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", handleOnline);
+      window.addEventListener("offline", handleOffline);
+    }
 
     return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("online", handleOnline);
+        window.removeEventListener("offline", handleOffline);
+      }
     };
-  }, []);
+  }, [voiceEnabled, isLocalListening, isSpeaking]);
+
+  // Add toggle for auto-conversation mode
+  const toggleAutoConversation = () => {
+    setAutoConversation(!autoConversation);
+  };
+
+  // Update the speech recognition handler to automatically start listening after speaking
+  useEffect(() => {
+    // When speaking ends and auto-conversation is enabled, automatically start listening
+    if (
+      !isSpeaking &&
+      autoConversation &&
+      voiceEnabled &&
+      !isLocalListening &&
+      isOnline
+    ) {
+      const timer = setTimeout(() => {
+        startListening();
+      }, 1000); // Small delay to give user time to process what was said
+
+      return () => clearTimeout(timer);
+    }
+  }, [isSpeaking, autoConversation, voiceEnabled, isLocalListening, isOnline]);
+
+  // Add a manual retry button for network errors
+  const handleManualRetry = () => {
+    setErrorMessage(null);
+    setIsRetrying(false);
+    // Short delay before retrying
+    setTimeout(() => {
+      startListening();
+    }, 500);
+  };
 
   return (
     <div className="flex flex-col">
@@ -283,6 +360,26 @@ export function AIVoiceInterfaceComponent({
             <VolumeX className="h-5 w-5" />
           )}
         </button>
+
+        {/* Add auto-conversation toggle */}
+        {voiceEnabled && (
+          <button
+            type="button"
+            className={`p-2 rounded-full ${
+              autoConversation
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground"
+            }`}
+            onClick={toggleAutoConversation}
+            title={
+              autoConversation
+                ? "Disable auto-conversation"
+                : "Enable auto-conversation"
+            }
+          >
+            <span className="text-xs">Auto</span>
+          </button>
+        )}
 
         {/* Microphone button */}
         <Button
@@ -391,6 +488,21 @@ export function AIVoiceInterfaceComponent({
             {errorMessage}
           </div>
         )}
+
+        {/* Retry button - show when there's a network error but we're online */}
+        {errorMessage &&
+          errorMessage.includes("network") &&
+          isOnline &&
+          !isRetrying && (
+            <button
+              type="button"
+              className="p-2 rounded-full bg-primary text-primary-foreground"
+              onClick={handleManualRetry}
+              title="Retry voice recognition"
+            >
+              <Wifi size={18} />
+            </button>
+          )}
       </div>
 
       {showAudioControls && voiceEnabled && (

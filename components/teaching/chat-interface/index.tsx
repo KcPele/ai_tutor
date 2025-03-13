@@ -22,6 +22,20 @@ interface AIChatInterfaceProps {
   tutorRole?: AITutorRole;
   className?: string;
   whiteboardRef?: React.RefObject<any>;
+  pdfInfo?: boolean;
+  voiceEnabled?: boolean;
+  setVoiceEnabled?: (enabled: boolean) => void;
+  isListening?: boolean;
+  setIsListening?: (listening: boolean) => void;
+  isSpeaking?: boolean;
+  setIsSpeaking?: (speaking: boolean) => void;
+  onVoiceError?: (error: {
+    type: string;
+    message: string;
+    isFinal: boolean;
+    isRetrying?: boolean;
+  }) => void;
+  voiceError?: string | null;
 }
 
 export function AIChatInterfaceComponent({
@@ -32,35 +46,54 @@ export function AIChatInterfaceComponent({
   tutorRole = "general",
   className = "",
   whiteboardRef,
+  pdfInfo,
+  voiceEnabled: externalVoiceEnabled,
+  setVoiceEnabled: externalSetVoiceEnabled,
+  isListening: externalIsListening,
+  setIsListening: externalSetIsListening,
+  isSpeaking: externalIsSpeaking,
+  setIsSpeaking: externalSetIsSpeaking,
+  onVoiceError,
+  voiceError: externalVoiceError,
 }: AIChatInterfaceProps) {
   const [inputValue, setInputValue] = useState("");
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [voiceEnabled, setVoiceEnabledLocal] = useState(true);
+  const [isListening, setIsListeningLocal] = useState(false);
+  const [isSpeaking, setIsSpeakingLocal] = useState(false);
   const [autoListen, setAutoListen] = useState(false);
+  const [localVoiceError, setLocalVoiceError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const speechSynthesisRef = useRef<SpeechSynthesisService | null>(null);
 
-  // Initialize speech synthesis
+  const effectiveVoiceEnabled =
+    externalVoiceEnabled !== undefined ? externalVoiceEnabled : voiceEnabled;
+  const effectiveSetVoiceEnabled =
+    externalSetVoiceEnabled || setVoiceEnabledLocal;
+  const effectiveIsListening =
+    externalIsListening !== undefined ? externalIsListening : isListening;
+  const effectiveSetIsListening = externalSetIsListening || setIsListeningLocal;
+  const effectiveIsSpeaking =
+    externalIsSpeaking !== undefined ? externalIsSpeaking : isSpeaking;
+  const effectiveSetIsSpeaking = externalSetIsSpeaking || setIsSpeakingLocal;
+  const effectiveVoiceError =
+    externalVoiceError !== undefined ? externalVoiceError : localVoiceError;
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       speechSynthesisRef.current = SpeechSynthesisService.getInstance();
     }
     return () => {
-      // Clean up speech synthesis
       if (speechSynthesisRef.current?.isSpeaking()) {
         speechSynthesisRef.current.stop();
       }
     };
   }, []);
 
-  // Auto-scroll to the latest message
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -71,28 +104,23 @@ export function AIChatInterfaceComponent({
     }
   }, [inputValue]);
 
-  // Speak the latest AI message when voiceEnabled is true
   useEffect(() => {
     const latestMessage = messages[messages.length - 1];
 
     if (
-      voiceEnabled &&
+      effectiveVoiceEnabled &&
       latestMessage &&
       latestMessage.role === "assistant" &&
       speechSynthesisRef.current &&
       !isLoading
     ) {
-      // Parse the message to extract any writing instructions
       const { text, writingInstructions } = parseAIResponseForVoice(
         latestMessage.content
       );
 
-      // Process writing instructions if whiteboard reference is available
       if (whiteboardRef?.current && writingInstructions.length > 0) {
         writingInstructions.forEach((instruction, index) => {
-          // Stagger writing on whiteboard to make it more natural
           setTimeout(() => {
-            // Calculate a reasonable position if not specified
             const position = instruction.position || {
               x: 100 + ((index * 50) % 400),
               y: 100 + Math.floor(index / 8) * 40,
@@ -104,25 +132,49 @@ export function AIChatInterfaceComponent({
               position.y,
               { animationSpeed: 20 }
             );
-          }, index * 500); // Stagger by 500ms
+          }, index * 500);
         });
       }
 
-      // Speak the clean text
-      setIsSpeaking(true);
+      setIsSpeakingLocal(true);
       speechSynthesisRef.current.speak(text, {
-        onStart: () => setIsSpeaking(true),
+        onStart: () => setIsSpeakingLocal(true),
         onEnd: () => {
-          setIsSpeaking(false);
-          // Auto-start listening after AI finishes speaking if autoListen is enabled
-          if (autoListen && voiceEnabled) {
-            setIsListening(true);
+          setIsSpeakingLocal(false);
+          if (autoListen && effectiveVoiceEnabled) {
+            setIsListeningLocal(true);
           }
         },
-        onError: () => setIsSpeaking(false),
+        onError: () => setIsSpeakingLocal(false),
       });
     }
-  }, [messages, voiceEnabled, isLoading, whiteboardRef, autoListen]);
+  }, [messages, effectiveVoiceEnabled, isLoading, whiteboardRef, autoListen]);
+
+  useEffect(() => {
+    if (
+      effectiveVoiceEnabled &&
+      messages.length > 0 &&
+      messages[messages.length - 1].role === "assistant" &&
+      pdfInfo
+    ) {
+      setTimeout(() => {
+        if (speechSynthesisRef.current) {
+          const latestMessage = messages[messages.length - 1];
+          const { text } = parseAIResponseForVoice(latestMessage.content);
+
+          setIsSpeakingLocal(true);
+          speechSynthesisRef.current.speak(text, {
+            onStart: () => setIsSpeakingLocal(true),
+            onEnd: () => {
+              setIsSpeakingLocal(false);
+              setIsListeningLocal(true);
+            },
+            onError: () => setIsSpeakingLocal(false),
+          });
+        }
+      }, 1000);
+    }
+  }, [pdfInfo, messages, effectiveVoiceEnabled]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,7 +184,7 @@ export function AIChatInterfaceComponent({
     const message = inputValue.trim();
     setInputValue("");
 
-    await onSendMessage(message, voiceEnabled);
+    await onSendMessage(message, effectiveVoiceEnabled);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -142,64 +194,50 @@ export function AIChatInterfaceComponent({
     }
   };
 
-  // Format message content with basic markdown-like support
   const formatMessageContent = (content: string) => {
-    // For code blocks
     content = content.replace(
       /```([\s\S]*?)```/g,
       '<pre class="bg-muted p-3 my-2 rounded-md overflow-x-auto"><code>$1</code></pre>'
     );
 
-    // For inline code
     content = content.replace(
       /`([^`]+)`/g,
       '<code class="bg-muted px-1 py-0.5 rounded">$1</code>'
     );
 
-    // For bold text
     content = content.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
 
-    // For italic text
     content = content.replace(/\*([^*]+)\*/g, "<em>$1</em>");
 
-    // For line breaks
     content = content.replace(/\n/g, "<br />");
 
-    // Remove [writing]...[/writing] markers if present
     content = content.replace(/\[writing\]([\s\S]*?)\[\/writing\]/g, "");
 
     return content;
   };
 
-  // Handle speech recognized
   const handleSpeechRecognized = async (text: string) => {
-    if (!text.trim() || isLoading) return;
+    if (!text.trim()) return;
 
-    // Stop current speech synthesis if active
-    if (speechSynthesisRef.current?.isSpeaking()) {
-      speechSynthesisRef.current.stop();
-      setIsSpeaking(false);
+    effectiveSetIsListening(false);
+
+    try {
+      await onSendMessage(text, effectiveVoiceEnabled);
+    } catch (error) {
+      console.error("Error sending speech message:", error);
     }
-
-    // Pause listening while processing the request
-    setIsListening(false);
-
-    await onSendMessage(text, voiceEnabled);
   };
 
-  // Parse AI response to extract whiteboard writing instructions
   const parseAIResponseForVoice = (response: string) => {
     const writingInstructions: {
       content: string;
       position?: { x: number; y: number };
     }[] = [];
 
-    // Find all writing instructions
     const writingPattern = /\[writing\]([\s\S]*?)\[\/writing\]/;
     let cleanedText = response;
     let match;
 
-    // Keep finding matches until there are no more
     while ((match = writingPattern.exec(cleanedText)) !== null) {
       const [fullMatch, content] = match;
 
@@ -207,11 +245,9 @@ export function AIChatInterfaceComponent({
         content: content.trim(),
       });
 
-      // Remove this writing instruction and continue
       cleanedText = cleanedText.replace(fullMatch, "");
     }
 
-    // Clean up any double spaces or new lines caused by removing instructions
     cleanedText = cleanedText.replace(/\n\s*\n/g, "\n\n").trim();
 
     return {
@@ -220,9 +256,22 @@ export function AIChatInterfaceComponent({
     };
   };
 
-  // Toggle auto-listen mode
   const toggleAutoListen = () => {
     setAutoListen(!autoListen);
+  };
+
+  const handleVoiceError = (error: {
+    type: string;
+    message: string;
+    isFinal: boolean;
+    isRetrying?: boolean;
+  }) => {
+    if (onVoiceError) {
+      onVoiceError(error);
+    } else {
+      setLocalVoiceError(error.message);
+      setTimeout(() => setLocalVoiceError(null), 5000);
+    }
   };
 
   return (
@@ -238,7 +287,7 @@ export function AIChatInterfaceComponent({
                 {tutorRole === "general" ? "various subjects" : tutorRole}. Ask
                 me any questions about your learning materials!
               </p>
-              {voiceEnabled && (
+              {effectiveVoiceEnabled && (
                 <div className="mt-2 p-2 bg-muted rounded-md text-sm">
                   <p>Voice mode is enabled. You can:</p>
                   <ul className="list-disc list-inside text-xs mt-1 space-y-1">
@@ -306,20 +355,26 @@ export function AIChatInterfaceComponent({
         <div ref={messagesEndRef} />
       </div>
 
+      {effectiveVoiceError && (
+        <div className="px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 text-sm">
+          {effectiveVoiceError}
+        </div>
+      )}
+
       <div className="border-t p-4">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex items-center gap-2">
             <AIVoiceInterfaceComponent
               onSpeechRecognized={handleSpeechRecognized}
-              isListening={isListening}
-              isSpeaking={isSpeaking}
-              voiceEnabled={voiceEnabled}
-              setVoiceEnabled={setVoiceEnabled}
-              onStartSpeaking={() => setIsSpeaking(true)}
-              onStopSpeaking={() => setIsSpeaking(false)}
+              isListening={effectiveIsListening}
+              isSpeaking={effectiveIsSpeaking}
+              voiceEnabled={effectiveVoiceEnabled}
+              setVoiceEnabled={effectiveSetVoiceEnabled}
+              onStartSpeaking={() => effectiveSetIsSpeaking(true)}
+              onStopSpeaking={() => effectiveSetIsSpeaking(false)}
             />
 
-            {voiceEnabled && (
+            {effectiveVoiceEnabled && (
               <div
                 className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs cursor-pointer ${
                   autoListen
