@@ -1,13 +1,12 @@
-import { hasEnvVars } from '@/utils/supabase/check-env-vars'
-import Link from 'next/link'
-import HeaderAuth from '../header-auth'
-import React from 'react'
-import { ThemeSwitcher } from '../theme-switcher'
+import { hasEnvVars } from "@/utils/supabase/check-env-vars";
+import Link from "next/link";
+import HeaderAuth from "../header-auth";
+import React from "react";
+import { ThemeSwitcher } from "../theme-switcher";
 
 const Navbar = () => {
   return (
-     
-      <nav className="w-full border-b border-b-foreground/10 h-16 sticky top-0 z-50 backdrop-blur-md bg-background/80">
+    <nav className="w-full border-b border-b-foreground/10 h-16 sticky top-0 z-50 backdrop-blur-md bg-background/80">
       <div className="container mx-auto flex justify-between items-center h-full px-4">
         <div className="flex items-center gap-2">
           <Link href="/" className="font-bold text-xl">
@@ -29,16 +28,16 @@ const Navbar = () => {
             How It Works
           </Link>
           <Link
-            href="#testimonials"
-            className="hover:text-primary transition-colors"
+            href="/blog"
+            className="font-medium text-foreground hover:text-primary transition-colors"
           >
-            Testimonials
+            Blog
           </Link>
           <Link
-            href="#pricing"
-            className="hover:text-primary transition-colors"
+            href="/about"
+            className="font-medium text-foreground hover:text-primary transition-colors"
           >
-            Pricing
+            About Us
           </Link>
         </div>
 
@@ -48,8 +47,7 @@ const Navbar = () => {
         </div>
       </div>
     </nav>
+  );
+};
 
-  )
-}
-
-export default Navbar
+export default Navbar;
