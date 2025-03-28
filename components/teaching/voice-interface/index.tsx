@@ -54,15 +54,13 @@ export function AIVoiceInterfaceComponent({
   const [isRecognitionSupported, setIsRecognitionSupported] = useState(false);
   const [isSynthesisSupported, setIsSynthesisSupported] = useState(false);
   const [isLocalListening, setIsLocalListening] = useState(isListening);
-  const [interimResult, setInterimResult] = useState("");
+  const [interimResult, setInterimResult] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showAudioControls, setShowAudioControls] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
-  const [isOnline, setIsOnline] = useState(
-    typeof navigator !== "undefined" ? navigator.onLine : true
-  );
+  const [isOnline, setIsOnline] = useState(true);
   const [autoConversation, setAutoConversation] = useState(false);
   const [networkErrorCount, setNetworkErrorCount] = useState(0);
   const [isSpeechToSpeechMode, setIsSpeechToSpeechMode] = useState(false);
@@ -72,12 +70,17 @@ export function AIVoiceInterfaceComponent({
   const [lastResponseAudio, setLastResponseAudio] = useState<string | null>(
     null
   );
+  const [silenceDetectionActive, setSilenceDetectionActive] = useState(false);
+  const [silenceDetectionCountdown, setSilenceDetectionCountdown] = useState<
+    number | null
+  >(null);
   const maxNetworkRetries = 3;
 
   const speechRecognitionRef = useRef<SpeechRecognitionService | null>(null);
   const speechSynthesisRef = useRef<SpeechSynthesisService | null>(null);
   const speechServiceRef = useRef<SpeechService | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const silenceCountdownTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Setup speech services
   useEffect(() => {
@@ -107,6 +110,11 @@ export function AIVoiceInterfaceComponent({
     // Setup online/offline events
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
+
+    // Initial check
+    setIsOnline(navigator.onLine);
+
+    // Add event listeners
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
@@ -156,6 +164,11 @@ export function AIVoiceInterfaceComponent({
   useEffect(() => {
     if (speechServiceRef.current) {
       speechServiceRef.current.setAutoConversation(autoConversation);
+
+      // Configure silence detection (enabled by default for auto conversation mode)
+      if (autoConversation) {
+        speechServiceRef.current.setSilenceDetection(true, 20000); // 20 seconds timeout
+      }
     }
   }, [autoConversation]);
 
@@ -285,6 +298,14 @@ export function AIVoiceInterfaceComponent({
       setLastResponseAudio(null);
     }
 
+    // Reset silence detection UI state
+    setSilenceDetectionActive(false);
+    setSilenceDetectionCountdown(null);
+    if (silenceCountdownTimerRef.current) {
+      clearInterval(silenceCountdownTimerRef.current);
+      silenceCountdownTimerRef.current = null;
+    }
+
     setIsRecording(true);
     setErrorMessage(null);
 
@@ -295,14 +316,49 @@ export function AIVoiceInterfaceComponent({
         tutorRole,
         voice: "nova", // Could be customizable later
         model: "gpt-4o",
+        silenceDetectionEnabled: autoConversation,
+        silenceDetectionTimeout: 20000, // 20 seconds
         onTranscriptionStart: () => {
           setIsRecording(true);
           setIsWaitingForResponse(false);
+
+          // If auto conversation is enabled, show silence detection is active
+          if (autoConversation) {
+            setSilenceDetectionActive(true);
+            // Set initial countdown value to 20 seconds (matches the silence detection timeout)
+            setSilenceDetectionCountdown(20);
+
+            // Start a visual countdown timer that updates every second
+            if (silenceCountdownTimerRef.current) {
+              clearInterval(silenceCountdownTimerRef.current);
+            }
+
+            silenceCountdownTimerRef.current = setInterval(() => {
+              setSilenceDetectionCountdown((prev) => {
+                if (prev === null || prev <= 1) {
+                  if (silenceCountdownTimerRef.current) {
+                    clearInterval(silenceCountdownTimerRef.current);
+                    silenceCountdownTimerRef.current = null;
+                  }
+                  return null;
+                }
+                return prev - 1;
+              });
+            }, 1000);
+          }
         },
         onTranscriptionComplete: (text) => {
           setLastTranscription(text);
           setIsRecording(false);
           setIsWaitingForResponse(true);
+
+          // Clear silence detection UI when transcription is complete
+          setSilenceDetectionActive(false);
+          setSilenceDetectionCountdown(null);
+          if (silenceCountdownTimerRef.current) {
+            clearInterval(silenceCountdownTimerRef.current);
+            silenceCountdownTimerRef.current = null;
+          }
         },
         onAIResponseStart: () => {
           if (onStartSpeaking) onStartSpeaking();
@@ -344,6 +400,14 @@ export function AIVoiceInterfaceComponent({
           );
           setIsRecording(false);
           setIsWaitingForResponse(false);
+
+          // Clear silence detection UI on error
+          setSilenceDetectionActive(false);
+          setSilenceDetectionCountdown(null);
+          if (silenceCountdownTimerRef.current) {
+            clearInterval(silenceCountdownTimerRef.current);
+            silenceCountdownTimerRef.current = null;
+          }
         },
       });
 
@@ -354,6 +418,14 @@ export function AIVoiceInterfaceComponent({
       setErrorMessage("Could not start speech conversation. Please try again.");
       setIsRecording(false);
       setIsWaitingForResponse(false);
+
+      // Clear silence detection UI on error
+      setSilenceDetectionActive(false);
+      setSilenceDetectionCountdown(null);
+      if (silenceCountdownTimerRef.current) {
+        clearInterval(silenceCountdownTimerRef.current);
+        silenceCountdownTimerRef.current = null;
+      }
     }
   };
 
@@ -364,6 +436,14 @@ export function AIVoiceInterfaceComponent({
     speechServiceRef.current.cancelSpeechToSpeech();
     setIsRecording(false);
     setIsWaitingForResponse(false);
+
+    // Clear silence detection UI when stopping
+    setSilenceDetectionActive(false);
+    setSilenceDetectionCountdown(null);
+    if (silenceCountdownTimerRef.current) {
+      clearInterval(silenceCountdownTimerRef.current);
+      silenceCountdownTimerRef.current = null;
+    }
 
     if (audioRef.current && lastResponseAudio) {
       audioRef.current.pause();
@@ -461,6 +541,31 @@ export function AIVoiceInterfaceComponent({
   const showLoadingIndicator = isSpeechToSpeechMode
     ? isWaitingForResponse
     : isProcessing || isRetrying;
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Clean up speech services
+      if (speechRecognitionRef.current?.isCurrentlyListening()) {
+        speechRecognitionRef.current.stopListening();
+      }
+      if (speechSynthesisRef.current?.isSpeaking()) {
+        speechSynthesisRef.current.stop();
+      }
+      if (speechServiceRef.current) {
+        speechServiceRef.current.cancelSpeechToSpeech();
+      }
+      if (audioRef.current && lastResponseAudio) {
+        URL.revokeObjectURL(lastResponseAudio);
+      }
+
+      // Clear silence detection timer
+      if (silenceCountdownTimerRef.current) {
+        clearInterval(silenceCountdownTimerRef.current);
+        silenceCountdownTimerRef.current = null;
+      }
+    };
+  }, [onStopSpeaking, lastResponseAudio]);
 
   return (
     <div className={cn("flex flex-col space-y-2", className)}>
@@ -620,6 +725,26 @@ export function AIVoiceInterfaceComponent({
         </div>
       )}
 
+      {/* Silence detection indicator */}
+      {silenceDetectionActive && silenceDetectionCountdown !== null && (
+        <div className="text-xs text-muted-foreground flex items-center">
+          <span className="inline-block h-2 w-2 rounded-full bg-amber-500 mr-1.5 animate-pulse"></span>
+          <span>
+            {silenceDetectionCountdown > 0
+              ? `Silence detected. Sending in ${silenceDetectionCountdown}s...`
+              : "Processing your speech..."}
+            {silenceDetectionCountdown > 0 && (
+              <button
+                onClick={stopSpeechToSpeech}
+                className="text-primary underline underline-offset-2 ml-1"
+              >
+                Send now
+              </button>
+            )}
+          </span>
+        </div>
+      )}
+
       {/* Error message */}
       {errorMessage && (
         <div className="text-xs text-destructive bg-destructive/10 p-2 rounded flex items-start">
@@ -644,6 +769,13 @@ export function AIVoiceInterfaceComponent({
             <li>Your speech will be converted to text and processed</li>
             <li>The AI will respond with natural speech</li>
             <li>Enable "Auto" for continuous conversation</li>
+            <li className="pl-4 mt-1">
+              <span className="text-primary-foreground bg-primary/20 px-1 py-0.5 rounded text-[10px] font-medium">
+                NEW
+              </span>{" "}
+              When "Auto" is enabled, recording will automatically end after 20
+              seconds of silence
+            </li>
           </ul>
         </div>
       )}

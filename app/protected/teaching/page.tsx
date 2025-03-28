@@ -56,9 +56,24 @@ export default function TeachingPage() {
 
   // Generate prompt based on PDF content and tutor role
   const generatePrompt = (pdfText: string, role: AITutorRole): string => {
-    return `You are an AI tutor specialized in ${role}. 
-You're helping with a document titled "${pdfInfo?.title || pdfInfo?.filename}". 
-Document content: ${pdfText.substring(0, 2000)}...`;
+    // Extract a representative summary of the document content
+    const documentSummary = pdfText.substring(0, 5000); // Include more content for better context
+
+    return `You are an AI tutor specialized in ${role} education. 
+You're helping the student understand a document titled "${pdfInfo?.title || pdfInfo?.filename}".
+
+DOCUMENT CONTENT:
+${documentSummary}
+${pdfText.length > 5000 ? "\n[Document continues beyond this excerpt, but you have access to its full content]" : ""}
+
+YOUR ROLE:
+- Explain concepts from this document clearly and accurately
+- Use the whiteboard to illustrate key points (with [writing]...[/writing] tags)
+- Answer questions specifically about this document
+- If asked about something not in the document, clarify that it's outside the document's scope but provide helpful information if possible
+- Engage in a natural teaching conversation about the document content
+
+Focus on being a helpful teacher for this specific document.`;
   };
 
   // Handle PDF processing
@@ -74,18 +89,45 @@ Document content: ${pdfText.substring(0, 2000)}...`;
     setVoiceEnabled(true);
     setVoiceError(null);
 
-    // Generate initial AI message based on PDF content
+    // Generate initial system message with comprehensive instructions
     const initialSystemMessage: ChatMessage = {
       id: uuidv4(),
       role: "system",
-      content: `PDF loaded: ${pdfData.filename}`,
+      content: `
+TEACHING ASSISTANT INSTRUCTIONS:
+You are an AI teaching assistant that specializes in explaining educational content. You have been provided with a document titled "${pdfData.title || pdfData.filename}" which is ${pdfData.numPages} pages long.
+
+YOUR PRIMARY RESPONSIBILITIES:
+1. Teach and explain the material in the document clearly and accurately
+2. Use the whiteboard to illustrate concepts when helpful (using [writing]...[/writing] tags)
+3. Answer questions specifically about the document content
+4. Maintain a helpful, encouraging teaching tone
+5. Break down complex concepts into understandable explanations
+6. Only teach about what is in the document or what is directly relevant
+
+DOCUMENT INFORMATION:
+- Title: ${pdfData.title || pdfData.filename}
+- Pages: ${pdfData.numPages}
+- Type: PDF document
+
+The user has just uploaded this document and is looking for your assistance in understanding its content.
+`,
       timestamp: Date.now(),
     };
 
+    // Generate a friendly initial AI welcome message
     const initialAIMessage: ChatMessage = {
       id: uuidv4(),
       role: "assistant",
-      content: `I've analyzed your document "${pdfData.filename}". What would you like to learn about it? You can ask me specific questions, or I can help explain key concepts.`,
+      content: `I've analyzed your document "${pdfData.title || pdfData.filename}". 
+
+I'm ready to help you understand its content! You can:
+- Ask specific questions about any part of the document
+- Request explanations of concepts or terms
+- Ask me to illustrate key points on the whiteboard
+- Get summaries of the main ideas
+
+What would you like to learn about first?`,
       timestamp: Date.now(),
     };
 
@@ -135,19 +177,19 @@ Document content: ${pdfText.substring(0, 2000)}...`;
     setIsLoading(true);
 
     try {
+      // Find the latest system message to use as context
+      const systemMessage = messages.find((msg) => msg.role === "system") || {
+        role: "system" as const,
+        content: generatePrompt(pdfInfo.text, tutorRole),
+      };
+
       // Convert our messages to the format expected by the OpenAI API
       const apiMessages = messages
-        .filter((msg) => msg.role !== "system")
+        .filter((msg) => msg.role !== "system") // Filter out system messages from the conversation
         .map((msg) => ({
           role: msg.role,
           content: msg.content,
         }));
-
-      // Add context about the PDF
-      const systemMessage = {
-        role: "system" as const,
-        content: generatePrompt(pdfInfo.text, tutorRole),
-      };
 
       // Add user message
       apiMessages.push({
@@ -272,6 +314,11 @@ Since the user is using voice mode, please optimize your response for spoken con
               Click the <Repeat className="h-3 w-3 inline mx-0.5" /> icon in the
               voice controls to enable speech-to-speech mode.
             </p>
+            <div className="mt-2 px-2 py-1.5 bg-background/50 rounded-sm border border-border/50 text-xs">
+              <span className="font-medium">Auto-Send Update:</span> When using
+              Auto mode, your message will now automatically send after 20
+              seconds of silence - no need to click the mic again!
+            </div>
           </div>
           <button
             onClick={dismissNotification}
@@ -330,12 +377,23 @@ Since the user is using voice mode, please optimize your response for spoken con
             {pdfInfo ? (
               <div className="p-4">
                 <div className="flex items-center mb-4">
-                  <FileText className="mr-2" />
+                  <FileText className="mr-2 text-primary" />
                   <span className="font-medium">{pdfInfo.filename}</span>
                 </div>
-                <div className="whitespace-pre-wrap text-sm border p-4 rounded bg-muted/50 max-h-[calc(100vh-12rem)] overflow-auto">
-                  {pdfInfo.text.substring(0, 2000)}
-                  {pdfInfo.text.length > 2000 && "..."}
+                <div className="p-4 rounded bg-muted/50 border">
+                  <h3 className="text-sm font-medium mb-2">Document Ready</h3>
+                  <p className="text-sm text-muted-foreground">
+                    The document has been successfully loaded. You can now ask
+                    questions about its content.
+                  </p>
+                  <div className="mt-3 text-xs text-muted-foreground flex items-center">
+                    <span className="bg-primary/10 text-primary px-2 py-1 rounded">
+                      {pdfInfo.numPages}{" "}
+                      {pdfInfo.numPages === 1 ? "page" : "pages"}
+                    </span>
+                    <span className="mx-2">•</span>
+                    <span>The AI has access to the full document content</span>
+                  </div>
                 </div>
               </div>
             ) : (

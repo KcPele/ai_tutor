@@ -308,6 +308,10 @@ export function AIAudioControlsComponent({
               <p className="text-muted-foreground mt-1">
                 Enable continuous conversations where the AI automatically
                 listens for your next question after responding.
+                <span className="block mt-1 text-primary-foreground bg-primary/10 px-2 py-1 rounded text-[10px]">
+                  <strong>NEW:</strong> With "Auto" enabled, recording
+                  automatically stops after 20 seconds of silence.
+                </span>
               </p>
             </div>
 
