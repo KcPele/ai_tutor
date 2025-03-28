@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { SendHorizonal, User, Bot, Trash2 } from "lucide-react";
+import { SendHorizonal, User, Bot, Trash2, Repeat } from "lucide-react";
 import { AITutorRole } from "@/utils/openai/chat";
 import { AIVoiceInterfaceComponent } from "../voice-interface";
 import { SpeechSynthesisService } from "@/utils/speech/speech-synthesis";
@@ -279,23 +279,39 @@ export function AIChatInterfaceComponent({
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-muted-foreground">
-            <div className="text-center space-y-3">
+            <div className="text-center space-y-3 max-w-md">
               <Bot className="h-12 w-12 mx-auto text-primary/60" />
               <h3 className="text-lg font-medium">AI Teaching Assistant</h3>
-              <p className="max-w-sm">
+              <p>
                 I'm your AI tutor specialized in{" "}
                 {tutorRole === "general" ? "various subjects" : tutorRole}. Ask
                 me any questions about your learning materials!
               </p>
               {effectiveVoiceEnabled && (
-                <div className="mt-2 p-2 bg-muted rounded-md text-sm">
-                  <p>Voice mode is enabled. You can:</p>
-                  <ul className="list-disc list-inside text-xs mt-1 space-y-1">
-                    <li>Click the microphone icon to start/stop speaking</li>
-                    <li>
-                      Enable auto-conversation mode for hands-free interaction
-                    </li>
-                  </ul>
+                <div className="mt-2 p-3 bg-muted rounded-md text-sm">
+                  <p className="font-medium text-foreground">
+                    Voice Features Available:
+                  </p>
+                  <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="bg-background rounded-md p-2 flex flex-col">
+                      <span className="text-xs font-medium text-primary mb-1">
+                        Voice Input
+                      </span>
+                      <p className="text-xs text-muted-foreground">
+                        Click the microphone icon to speak your questions
+                        instead of typing.
+                      </p>
+                    </div>
+                    <div className="bg-background rounded-md p-2 flex flex-col">
+                      <span className="text-xs font-medium text-primary mb-1">
+                        Speech-to-Speech
+                      </span>
+                      <p className="text-xs text-muted-foreground">
+                        Click the <Repeat className="h-3 w-3 inline mx-0.5" />{" "}
+                        icon to enable fully voiced conversations.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -372,6 +388,8 @@ export function AIChatInterfaceComponent({
               setVoiceEnabled={effectiveSetVoiceEnabled}
               onStartSpeaking={() => effectiveSetIsSpeaking(true)}
               onStopSpeaking={() => effectiveSetIsSpeaking(false)}
+              messages={messages}
+              tutorRole={tutorRole}
             />
 
             {effectiveVoiceEnabled && (

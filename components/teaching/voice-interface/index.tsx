@@ -11,13 +11,17 @@ import {
   AlertOctagon,
   Wifi,
   WifiOff,
+  Repeat,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 
 // Import speech services
 import { SpeechSynthesisService } from "@/utils/speech/speech-synthesis";
 import { SpeechRecognitionService } from "@/utils/speech/speech-recognition";
+import { SpeechService } from "@/utils/speech/speech-service";
+import { AITutorRole } from "@/utils/openai/chat";
 
 // Import audio controls component
 import { AIAudioControlsComponent } from "./audio-controls";
@@ -31,6 +35,8 @@ export interface VoiceInterfaceProps {
   voiceEnabled: boolean;
   setVoiceEnabled: (enabled: boolean) => void;
   className?: string;
+  messages?: any[];
+  tutorRole?: AITutorRole;
 }
 
 export function AIVoiceInterfaceComponent({
@@ -42,6 +48,8 @@ export function AIVoiceInterfaceComponent({
   voiceEnabled,
   setVoiceEnabled,
   className = "",
+  messages = [],
+  tutorRole = "general",
 }: VoiceInterfaceProps) {
   const [isRecognitionSupported, setIsRecognitionSupported] = useState(false);
   const [isSynthesisSupported, setIsSynthesisSupported] = useState(false);
@@ -55,12 +63,21 @@ export function AIVoiceInterfaceComponent({
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== "undefined" ? navigator.onLine : true
   );
-  const [autoConversation, setAutoConversation] = useState(true);
+  const [autoConversation, setAutoConversation] = useState(false);
   const [networkErrorCount, setNetworkErrorCount] = useState(0);
+  const [isSpeechToSpeechMode, setIsSpeechToSpeechMode] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
+  const [lastTranscription, setLastTranscription] = useState("");
+  const [lastResponseAudio, setLastResponseAudio] = useState<string | null>(
+    null
+  );
   const maxNetworkRetries = 3;
 
   const speechRecognitionRef = useRef<SpeechRecognitionService | null>(null);
   const speechSynthesisRef = useRef<SpeechSynthesisService | null>(null);
+  const speechServiceRef = useRef<SpeechService | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Setup speech services
   useEffect(() => {
@@ -76,7 +93,22 @@ export function AIVoiceInterfaceComponent({
       setIsSynthesisSupported(
         speechSynthesisRef.current?.isSupported() || false
       );
+
+      // Initialize speech service for speech-to-speech
+      speechServiceRef.current = SpeechService.getInstance();
     }
+
+    // Setup audio element
+    audioRef.current = new Audio();
+    audioRef.current.onended = () => {
+      if (onStopSpeaking) onStopSpeaking();
+    };
+
+    // Setup online/offline events
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
 
     return () => {
       // Clean up speech services
@@ -86,8 +118,18 @@ export function AIVoiceInterfaceComponent({
       if (speechSynthesisRef.current?.isSpeaking()) {
         speechSynthesisRef.current.stop();
       }
+      if (speechServiceRef.current) {
+        speechServiceRef.current.cancelSpeechToSpeech();
+      }
+      if (audioRef.current && lastResponseAudio) {
+        URL.revokeObjectURL(lastResponseAudio);
+      }
+
+      // Remove event listeners
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
     };
-  }, []);
+  }, [onStopSpeaking]);
 
   // Start/stop recognition based on isListening prop and voiceEnabled
   useEffect(() => {
@@ -97,18 +139,27 @@ export function AIVoiceInterfaceComponent({
     if (
       isListening &&
       voiceEnabled &&
-      !recognitionService.isCurrentlyListening()
+      !recognitionService.isCurrentlyListening() &&
+      !isSpeechToSpeechMode
     ) {
       startListening();
     } else if (
       (!isListening || !voiceEnabled) &&
-      recognitionService.isCurrentlyListening()
+      recognitionService.isCurrentlyListening() &&
+      !isSpeechToSpeechMode
     ) {
       stopListening();
     }
-  }, [isListening, voiceEnabled, isRecognitionSupported]);
+  }, [isListening, voiceEnabled, isRecognitionSupported, isSpeechToSpeechMode]);
 
-  // Handle starting the listening process
+  // Update auto conversation in speech service when changed
+  useEffect(() => {
+    if (speechServiceRef.current) {
+      speechServiceRef.current.setAutoConversation(autoConversation);
+    }
+  }, [autoConversation]);
+
+  // Handle starting the listening process (traditional web speech)
   const startListening = () => {
     const recognitionService = speechRecognitionRef.current;
     if (!recognitionService || !isRecognitionSupported || !voiceEnabled) return;
@@ -194,7 +245,7 @@ export function AIVoiceInterfaceComponent({
     });
   };
 
-  // Handle stopping the listening process
+  // Handle stopping the listening process (traditional web speech)
   const stopListening = () => {
     const recognitionService = speechRecognitionRef.current;
     if (!recognitionService) return;
@@ -204,7 +255,7 @@ export function AIVoiceInterfaceComponent({
     setInterimResult("");
   };
 
-  // Process recognized speech
+  // Process recognized speech from traditional speech recognition
   const processRecognizedSpeech = async (text: string) => {
     if (!text.trim() || isProcessing) return;
 
@@ -222,6 +273,112 @@ export function AIVoiceInterfaceComponent({
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Start speech-to-speech conversation
+  const startSpeechToSpeech = async () => {
+    if (!speechServiceRef.current || !voiceEnabled) return;
+
+    if (audioRef.current && lastResponseAudio) {
+      audioRef.current.pause();
+      URL.revokeObjectURL(lastResponseAudio);
+      setLastResponseAudio(null);
+    }
+
+    setIsRecording(true);
+    setErrorMessage(null);
+
+    try {
+      const chatContext = buildChatContext();
+
+      await speechServiceRef.current.startSpeechToSpeech({
+        tutorRole,
+        voice: "nova", // Could be customizable later
+        model: "gpt-4o",
+        onTranscriptionStart: () => {
+          setIsRecording(true);
+          setIsWaitingForResponse(false);
+        },
+        onTranscriptionComplete: (text) => {
+          setLastTranscription(text);
+          setIsRecording(false);
+          setIsWaitingForResponse(true);
+        },
+        onAIResponseStart: () => {
+          if (onStartSpeaking) onStartSpeaking();
+        },
+        onAIResponseText: async (text) => {
+          // Pass the response text to the chat interface
+          try {
+            await onSpeechRecognized(lastTranscription);
+          } catch (error) {
+            console.error("Error updating chat with transcription:", error);
+          }
+        },
+        onAIResponseAudio: (audioUrl) => {
+          setLastResponseAudio(audioUrl);
+
+          if (audioRef.current) {
+            audioRef.current.src = audioUrl;
+            audioRef.current.play().catch((error) => {
+              console.error("Error playing audio:", error);
+            });
+          }
+        },
+        onAIResponseComplete: () => {
+          setIsWaitingForResponse(false);
+          if (onStopSpeaking) onStopSpeaking();
+
+          // Auto-restart if auto conversation is enabled
+          if (autoConversation && speechServiceRef.current) {
+            // Small delay before starting next recording
+            setTimeout(() => {
+              startSpeechToSpeech();
+            }, 1000);
+          }
+        },
+        onError: (error) => {
+          console.error("Speech-to-speech error:", error);
+          setErrorMessage(
+            typeof error === "string" ? error : "Error processing speech"
+          );
+          setIsRecording(false);
+          setIsWaitingForResponse(false);
+        },
+      });
+
+      // Set the chat context after initialization
+      speechServiceRef.current.setChatContext(chatContext);
+    } catch (error) {
+      console.error("Error starting speech-to-speech:", error);
+      setErrorMessage("Could not start speech conversation. Please try again.");
+      setIsRecording(false);
+      setIsWaitingForResponse(false);
+    }
+  };
+
+  // Stop speech-to-speech conversation
+  const stopSpeechToSpeech = () => {
+    if (!speechServiceRef.current) return;
+
+    speechServiceRef.current.cancelSpeechToSpeech();
+    setIsRecording(false);
+    setIsWaitingForResponse(false);
+
+    if (audioRef.current && lastResponseAudio) {
+      audioRef.current.pause();
+    }
+  };
+
+  // Build chat context from messages
+  const buildChatContext = () => {
+    // Filter out system messages and format the rest
+    return messages
+      .filter((msg) => msg.role !== "system")
+      .map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      }));
   };
 
   // Toggle voice enabled state
@@ -243,272 +400,274 @@ export function AIVoiceInterfaceComponent({
       if (speechSynthesisRef.current?.isSpeaking()) {
         speechSynthesisRef.current.stop();
       }
+      if (speechServiceRef.current) {
+        speechServiceRef.current.cancelSpeechToSpeech();
+      }
       setShowAudioControls(false);
       setShowHelp(false);
+      setAutoConversation(false);
     }
   };
 
-  // Toggle listening state manually
-  const toggleListening = () => {
-    if (!isRecognitionSupported || !voiceEnabled) return;
+  // Toggle speech-to-speech mode
+  const toggleSpeechToSpeechMode = () => {
+    const newMode = !isSpeechToSpeechMode;
+    setIsSpeechToSpeechMode(newMode);
 
-    if (isLocalListening) {
-      stopListening();
-    } else {
-      startListening();
+    // Clean up current activities
+    if (speechRecognitionRef.current?.isCurrentlyListening()) {
+      speechRecognitionRef.current.stopListening();
     }
+    if (speechSynthesisRef.current?.isSpeaking()) {
+      speechSynthesisRef.current.stop();
+    }
+    if (speechServiceRef.current) {
+      speechServiceRef.current.cancelSpeechToSpeech();
+    }
+
+    setIsLocalListening(false);
+    setInterimResult("");
+    setIsRecording(false);
+    setIsWaitingForResponse(false);
   };
 
-  // Add event listeners for online/offline status
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      setErrorMessage(
-        "Connection restored. Voice recognition should work now."
-      );
-      // Try to restart listening if it was active before
-      if (voiceEnabled && !isLocalListening && !isSpeaking) {
-        setTimeout(() => startListening(), 1000);
-      }
-    };
-
-    const handleOffline = () => {
-      setIsOnline(false);
-      setErrorMessage(
-        "Your device appears to be offline. Voice recognition requires an internet connection."
-      );
-      stopListening();
-    };
-
-    if (typeof window !== "undefined") {
-      window.addEventListener("online", handleOnline);
-      window.addEventListener("offline", handleOffline);
-    }
-
-    return () => {
-      if (typeof window !== "undefined") {
-        window.removeEventListener("online", handleOnline);
-        window.removeEventListener("offline", handleOffline);
-      }
-    };
-  }, [voiceEnabled, isLocalListening, isSpeaking]);
-
-  // Add toggle for auto-conversation mode
+  // Toggle automatic conversation mode
   const toggleAutoConversation = () => {
     setAutoConversation(!autoConversation);
   };
 
-  // Update the speech recognition handler to automatically start listening after speaking
-  useEffect(() => {
-    // When speaking ends and auto-conversation is enabled, automatically start listening
-    if (
-      !isSpeaking &&
-      autoConversation &&
-      voiceEnabled &&
-      !isLocalListening &&
-      isOnline
-    ) {
-      const timer = setTimeout(() => {
+  // Handle mic button click
+  const handleMicClick = () => {
+    if (isSpeechToSpeechMode) {
+      if (isRecording || isWaitingForResponse) {
+        stopSpeechToSpeech();
+      } else {
+        startSpeechToSpeech();
+      }
+    } else {
+      if (isLocalListening) {
+        stopListening();
+      } else {
         startListening();
-      }, 1000); // Small delay to give user time to process what was said
-
-      return () => clearTimeout(timer);
+      }
     }
-  }, [isSpeaking, autoConversation, voiceEnabled, isLocalListening, isOnline]);
-
-  // Add a manual retry button for network errors
-  const handleManualRetry = () => {
-    setErrorMessage(null);
-    setIsRetrying(false);
-    // Short delay before retrying
-    setTimeout(() => {
-      startListening();
-    }, 500);
   };
 
-  return (
-    <div className="flex flex-col">
-      <div className={`flex items-center space-x-2 ${className}`}>
-        {/* Network status indicator */}
-        {!isOnline && (
-          <div className="absolute -top-10 right-0 bg-destructive text-destructive-foreground px-3 py-1.5 rounded-md text-sm flex items-center gap-2 whitespace-nowrap z-10">
-            <WifiOff size={16} />
-            <span>You're offline</span>
-          </div>
-        )}
+  // Calculate button states
+  const micActive = isSpeechToSpeechMode
+    ? isRecording || isWaitingForResponse
+    : isLocalListening;
 
-        {/* Voice mode toggle button */}
-        <button
+  const showLoadingIndicator = isSpeechToSpeechMode
+    ? isWaitingForResponse
+    : isProcessing || isRetrying;
+
+  return (
+    <div className={cn("flex flex-col space-y-2", className)}>
+      {/* Main voice controls */}
+      <div className="flex items-center space-x-2">
+        {/* Mic toggle button */}
+        <Button
           type="button"
-          className={`p-2 rounded-md ${
-            voiceEnabled
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-muted-foreground"
-          } hover:opacity-90 transition-colors`}
+          size="icon"
+          variant={micActive ? "default" : "outline"}
+          className={cn(
+            "h-9 w-9 rounded-full transition-all",
+            micActive ? "bg-primary text-primary-foreground" : "",
+            !voiceEnabled || !isRecognitionSupported ? "opacity-50" : ""
+          )}
+          onClick={handleMicClick}
+          disabled={
+            !voiceEnabled ||
+            !isRecognitionSupported ||
+            (isSpeaking && !isSpeechToSpeechMode)
+          }
+          aria-label={micActive ? "Stop listening" : "Start listening"}
+          title={micActive ? "Stop listening" : "Start listening"}
+        >
+          {showLoadingIndicator ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : micActive ? (
+            <MicOff className="h-4 w-4" />
+          ) : (
+            <Mic className="h-4 w-4" />
+          )}
+        </Button>
+
+        {/* Voice toggle button */}
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className={cn(
+            "h-9 w-9 rounded-full",
+            !isSynthesisSupported ? "opacity-50" : ""
+          )}
           onClick={toggleVoiceEnabled}
-          aria-label={
-            voiceEnabled ? "Disable voice interface" : "Enable voice interface"
-          }
-          title={
-            voiceEnabled ? "Disable voice interface" : "Enable voice interface"
-          }
-          disabled={!isRecognitionSupported && !isSynthesisSupported}
+          disabled={!isSynthesisSupported}
+          aria-label={voiceEnabled ? "Disable voice" : "Enable voice"}
+          title={voiceEnabled ? "Disable voice" : "Enable voice"}
         >
           {voiceEnabled ? (
-            <Volume2 className="h-5 w-5" />
+            <Volume2 className="h-4 w-4 text-primary" />
           ) : (
-            <VolumeX className="h-5 w-5" />
+            <VolumeX className="h-4 w-4" />
           )}
-        </button>
+        </Button>
 
-        {/* Add auto-conversation toggle */}
-        {voiceEnabled && (
-          <button
+        {/* Speech-to-speech mode toggle */}
+        {voiceEnabled && isRecognitionSupported && (
+          <Button
             type="button"
-            className={`p-2 rounded-full ${
+            size="icon"
+            variant={isSpeechToSpeechMode ? "default" : "ghost"}
+            className={cn(
+              "h-9 w-9 rounded-full",
+              isSpeechToSpeechMode ? "bg-primary/20 text-primary" : ""
+            )}
+            onClick={toggleSpeechToSpeechMode}
+            title={
+              isSpeechToSpeechMode
+                ? "Switch to standard voice mode"
+                : "Switch to speech-to-speech mode"
+            }
+          >
+            <Repeat className="h-4 w-4" />
+          </Button>
+        )}
+
+        {/* Auto conversation toggle for speech-to-speech mode */}
+        {voiceEnabled && isSpeechToSpeechMode && (
+          <div
+            className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs cursor-pointer ${
               autoConversation
-                ? "bg-primary text-primary-foreground"
+                ? "bg-primary/20 text-primary"
                 : "bg-muted text-muted-foreground"
             }`}
             onClick={toggleAutoConversation}
             title={
               autoConversation
-                ? "Disable auto-conversation"
-                : "Enable auto-conversation"
+                ? "Disable continuous conversation"
+                : "Enable continuous conversation"
             }
           >
-            <span className="text-xs">Auto</span>
-          </button>
+            <span
+              className={`w-2.5 h-2.5 rounded-full ${autoConversation ? "bg-primary animate-pulse" : "bg-muted-foreground"}`}
+            ></span>
+            Auto
+          </div>
         )}
 
-        {/* Microphone button */}
-        <Button
-          type="button"
-          size="icon"
-          variant={isListening ? "default" : "outline"}
-          className={cn(
-            "rounded-full",
-            isListening && "bg-primary text-primary-foreground animate-pulse",
-            !isRecognitionSupported && "opacity-50 cursor-not-allowed"
-          )}
-          disabled={!isRecognitionSupported || !isOnline || !voiceEnabled}
-          onClick={toggleListening}
-          title={
-            !isRecognitionSupported
-              ? "Speech recognition not supported in this browser"
-              : !isOnline
-                ? "Speech recognition requires an internet connection"
-                : !voiceEnabled
-                  ? "Enable voice mode first"
-                  : isListening
-                    ? "Stop listening"
-                    : "Start listening"
-          }
-        >
-          {isListening ? (
-            <Mic className="h-4 w-4" />
-          ) : (
-            <MicOff className="h-4 w-4" />
-          )}
-        </Button>
-
+        {/* Mode indicator */}
         {voiceEnabled && (
-          <button
+          <Badge
+            variant="outline"
+            className={cn(
+              "ml-2 text-xs",
+              isSpeechToSpeechMode
+                ? "border-primary text-primary"
+                : "border-muted-foreground text-muted-foreground"
+            )}
+          >
+            {isSpeechToSpeechMode ? "Speech-to-Speech" : "Voice Input"}
+          </Badge>
+        )}
+
+        {/* Audio controls toggle */}
+        {voiceEnabled && (
+          <Button
             type="button"
-            className={`p-2 rounded-md bg-muted text-muted-foreground hover:opacity-90 transition-colors ${
-              showAudioControls ? "bg-primary/20" : ""
-            }`}
+            size="icon"
+            variant={showAudioControls ? "default" : "ghost"}
+            className="h-7 w-7 rounded-full ml-auto"
             onClick={() => setShowAudioControls(!showAudioControls)}
             aria-label={
-              showAudioControls ? "Hide audio settings" : "Show audio settings"
+              showAudioControls ? "Hide audio controls" : "Show audio controls"
             }
             title={
-              showAudioControls ? "Hide audio settings" : "Show audio settings"
+              showAudioControls ? "Hide audio controls" : "Show audio controls"
             }
           >
-            <Settings className="h-5 w-5" />
-          </button>
+            <Settings className="h-3.5 w-3.5" />
+          </Button>
         )}
 
-        {isProcessing && (
-          <div className="flex items-center text-xs text-primary animate-pulse">
-            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            Processing...
+        {/* Network status indicator */}
+        {!isOnline && (
+          <div
+            className="text-destructive flex items-center"
+            title="You are offline. Voice features may not work."
+          >
+            <WifiOff className="h-4 w-4 mr-1" />
           </div>
         )}
-
-        {isRetrying && (
-          <div className="flex items-center text-xs text-amber-500 animate-pulse">
-            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            Reconnecting...
-          </div>
-        )}
-
-        {interimResult && !isRetrying && (
-          <div className="ml-2 text-xs max-w-xs truncate text-muted-foreground">
-            "{interimResult}"
-          </div>
-        )}
-
-        {!isRecognitionSupported && !isSynthesisSupported && (
-          <div className="text-xs text-muted-foreground">
-            Voice features not supported in this browser.
-            <a
-              href="https://caniuse.com/speech-recognition"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="ml-1 underline text-primary"
-            >
-              Learn more
-            </a>
-          </div>
-        )}
-
-        {isSpeaking && (
-          <div className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded-full animate-pulse">
-            Speaking...
-          </div>
-        )}
-
-        {/* Help tooltip */}
-        {showHelp && (
-          <div className="text-xs bg-primary/10 text-primary px-3 py-1.5 rounded-md max-w-xs">
-            <p className="font-medium mb-1">Voice mode enabled</p>
-            <ul className="list-disc list-inside space-y-0.5">
-              <li>Click the microphone to start speaking</li>
-              <li>Allow microphone access when prompted</li>
-              <li>Speak clearly when the mic is active</li>
-            </ul>
-          </div>
-        )}
-
-        {/* Error message display */}
-        {errorMessage && !showHelp && (
-          <div className="text-xs text-destructive bg-destructive/10 px-2 py-1 rounded-md max-w-xs overflow-hidden text-ellipsis">
-            {errorMessage}
-          </div>
-        )}
-
-        {/* Retry button - show when there's a network error but we're online */}
-        {errorMessage &&
-          errorMessage.includes("network") &&
-          isOnline &&
-          !isRetrying && (
-            <button
-              type="button"
-              className="p-2 rounded-full bg-primary text-primary-foreground"
-              onClick={handleManualRetry}
-              title="Retry voice recognition"
-            >
-              <Wifi size={18} />
-            </button>
-          )}
       </div>
 
-      {showAudioControls && voiceEnabled && (
-        <div className="mt-2">
-          <AIAudioControlsComponent voiceEnabled={voiceEnabled} />
+      {/* Status indicators */}
+      {isSpeechToSpeechMode && (isRecording || isWaitingForResponse) && (
+        <div className="text-xs text-primary flex items-center animate-pulse">
+          {isRecording ? (
+            <>
+              <Mic className="h-3 w-3 mr-1.5" />
+              <span>Listening...</span>
+            </>
+          ) : (
+            <>
+              <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+              <span>Processing your speech...</span>
+            </>
+          )}
         </div>
+      )}
+
+      {/* Error message */}
+      {errorMessage && (
+        <div className="text-xs text-destructive bg-destructive/10 p-2 rounded flex items-start">
+          <AlertOctagon className="h-3.5 w-3.5 mr-1.5 mt-0.5 flex-shrink-0" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
+
+      {/* Interim speech result */}
+      {interimResult && (
+        <div className="text-xs italic text-muted-foreground bg-muted/50 p-1.5 rounded">
+          "{interimResult}"
+        </div>
+      )}
+
+      {/* Speech-to-speech mode help tooltip */}
+      {isSpeechToSpeechMode && showHelp && (
+        <div className="text-xs bg-muted/80 p-2 rounded shadow-sm animate-fadeIn border border-primary/20">
+          <p className="font-medium mb-1 text-primary">Speech-to-Speech Mode</p>
+          <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
+            <li>Click the mic to start a voice conversation</li>
+            <li>Your speech will be converted to text and processed</li>
+            <li>The AI will respond with natural speech</li>
+            <li>Enable "Auto" for continuous conversation</li>
+          </ul>
+        </div>
+      )}
+
+      {/* Voice mode help tooltip */}
+      {!isSpeechToSpeechMode && showHelp && (
+        <div className="text-xs bg-muted p-2 rounded animate-fadeIn">
+          <p className="font-medium mb-1">Voice mode enabled</p>
+          <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
+            <li>Click the mic to start/stop listening</li>
+            <li>
+              Try speech-to-speech mode for continuous voice conversations
+            </li>
+            <li>Click the settings icon for voice customization</li>
+          </ul>
+        </div>
+      )}
+
+      {/* Expandable audio controls */}
+      {showAudioControls && (
+        <AIAudioControlsComponent
+          className="border rounded-md p-3 bg-card"
+          voiceEnabled={voiceEnabled}
+        />
       )}
     </div>
   );

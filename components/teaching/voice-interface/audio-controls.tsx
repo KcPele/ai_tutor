@@ -36,6 +36,7 @@ export function AIAudioControlsComponent({
     SpeechSynthesisVoice[]
   >([]);
   const [selectedVoice, setSelectedVoice] = useState<string | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined" && voiceEnabled) {
@@ -161,111 +162,165 @@ export function AIAudioControlsComponent({
   if (!voiceEnabled) return null;
 
   return (
-    <div className={`flex items-center space-x-2 ${className}`}>
-      <Popover>
-        <PopoverTrigger asChild>
+    <div className={`space-y-3 ${className}`}>
+      <div className="flex items-center space-x-2 justify-between">
+        <h3 className="text-sm font-medium">Voice Settings</h3>
+
+        <div className="flex items-center space-x-2">
           <button
             type="button"
-            className="bg-muted p-2 rounded-md hover:bg-muted/80 transition-colors"
-            aria-label="Audio settings"
-            title="Audio settings"
+            onClick={() => setShowHelp(!showHelp)}
+            className="p-1 hover:bg-muted rounded-md text-xs text-muted-foreground"
           >
-            <Settings className="h-4 w-4" />
+            {showHelp ? "Hide Help" : "Show Help"}
           </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-80">
-          <div className="space-y-4">
-            <h3 className="font-medium">Audio Settings</h3>
 
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <Label htmlFor="voice-volume">Volume</Label>
-                <button
-                  type="button"
-                  onClick={toggleMute}
-                  className="p-1 hover:bg-muted rounded-md"
-                  aria-label={isMuted ? "Unmute" : "Mute"}
-                  title={isMuted ? "Unmute" : "Mute"}
-                >
-                  {getVolumeIcon()}
-                </button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="bg-muted p-2 rounded-md hover:bg-muted/80 transition-colors"
+                aria-label="Audio settings"
+                title="Audio settings"
+              >
+                <Settings className="h-4 w-4" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80">
+              <div className="space-y-4">
+                <h3 className="font-medium">Audio Settings</h3>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <Label htmlFor="voice-volume">Volume</Label>
+                    <button
+                      type="button"
+                      onClick={toggleMute}
+                      className="p-1 hover:bg-muted rounded-md"
+                      aria-label={isMuted ? "Unmute" : "Mute"}
+                      title={isMuted ? "Unmute" : "Mute"}
+                    >
+                      {getVolumeIcon()}
+                    </button>
+                  </div>
+                  <Slider
+                    id="voice-volume"
+                    value={[volume]}
+                    max={100}
+                    step={1}
+                    onValueChange={handleVolumeChange}
+                    aria-label="Volume"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="voice-rate">Speech Rate</Label>
+                  <Slider
+                    id="voice-rate"
+                    value={[rate]}
+                    min={0.5}
+                    max={2}
+                    step={0.1}
+                    onValueChange={handleRateChange}
+                    aria-label="Speech Rate"
+                  />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Slow</span>
+                    <span>Normal</span>
+                    <span>Fast</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="voice-pitch">Pitch</Label>
+                  <Slider
+                    id="voice-pitch"
+                    value={[pitch]}
+                    min={0.5}
+                    max={2}
+                    step={0.1}
+                    onValueChange={handlePitchChange}
+                    aria-label="Pitch"
+                  />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Low</span>
+                    <span>Normal</span>
+                    <span>High</span>
+                  </div>
+                </div>
+
+                {availableVoices.length > 0 && (
+                  <div className="space-y-2">
+                    <Label htmlFor="voice-selection">Voice</Label>
+                    <select
+                      id="voice-selection"
+                      value={selectedVoice || ""}
+                      onChange={handleVoiceChange}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                    >
+                      {availableVoices.map((voice) => (
+                        <option key={voice.name} value={voice.name}>
+                          {voice.name} ({voice.lang})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
-              <Slider
-                id="voice-volume"
-                value={[volume]}
-                max={100}
-                step={1}
-                onValueChange={handleVolumeChange}
-                aria-label="Volume"
-              />
+            </PopoverContent>
+          </Popover>
+
+          <button
+            type="button"
+            onClick={toggleMute}
+            className="bg-muted p-2 rounded-md hover:bg-muted/80 transition-colors"
+            aria-label={isMuted ? "Unmute" : "Mute"}
+            title={isMuted ? "Unmute" : "Mute"}
+          >
+            {getVolumeIcon()}
+          </button>
+        </div>
+      </div>
+
+      {showHelp && (
+        <div className="text-xs bg-muted/50 p-3 rounded border border-border">
+          <h4 className="font-medium mb-2">Voice Feature Guide</h4>
+
+          <div className="space-y-3">
+            <div>
+              <h5 className="font-medium text-primary">Voice Input</h5>
+              <p className="text-muted-foreground mt-1">
+                Dictate your questions and messages instead of typing. Click the
+                microphone icon to start/stop.
+              </p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="voice-rate">Speech Rate</Label>
-              <Slider
-                id="voice-rate"
-                value={[rate]}
-                min={0.5}
-                max={2}
-                step={0.1}
-                onValueChange={handleRateChange}
-                aria-label="Speech Rate"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Slow</span>
-                <span>Normal</span>
-                <span>Fast</span>
-              </div>
+            <div>
+              <h5 className="font-medium text-primary">Speech-to-Speech</h5>
+              <p className="text-muted-foreground mt-1">
+                Have a natural conversation with the AI tutor by voice. The AI
+                will listen to you and respond with natural speech.
+              </p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="voice-pitch">Pitch</Label>
-              <Slider
-                id="voice-pitch"
-                value={[pitch]}
-                min={0.5}
-                max={2}
-                step={0.1}
-                onValueChange={handlePitchChange}
-                aria-label="Pitch"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Low</span>
-                <span>Normal</span>
-                <span>High</span>
-              </div>
+            <div>
+              <h5 className="font-medium text-primary">Auto Conversation</h5>
+              <p className="text-muted-foreground mt-1">
+                Enable continuous conversations where the AI automatically
+                listens for your next question after responding.
+              </p>
             </div>
 
-            {availableVoices.length > 0 && (
-              <div className="space-y-2">
-                <Label htmlFor="voice-selection">Voice</Label>
-                <select
-                  id="voice-selection"
-                  value={selectedVoice || ""}
-                  onChange={handleVoiceChange}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-                >
-                  {availableVoices.map((voice) => (
-                    <option key={voice.name} value={voice.name}>
-                      {voice.name} ({voice.lang})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+            <div>
+              <h5 className="font-medium text-primary">Voice Customization</h5>
+              <p className="text-muted-foreground mt-1">
+                Adjust the speed, pitch, and voice used for AI responses to your
+                preference.
+              </p>
+            </div>
           </div>
-        </PopoverContent>
-      </Popover>
-
-      <button
-        type="button"
-        onClick={toggleMute}
-        className="bg-muted p-2 rounded-md hover:bg-muted/80 transition-colors"
-        aria-label={isMuted ? "Unmute" : "Mute"}
-        title={isMuted ? "Unmute" : "Mute"}
-      >
-        {getVolumeIcon()}
-      </button>
+        </div>
+      )}
     </div>
   );
 }

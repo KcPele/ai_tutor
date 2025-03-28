@@ -10,6 +10,9 @@ import {
   FileText,
   Settings,
   X,
+  Volume2,
+  Repeat,
+  Info,
 } from "lucide-react";
 import { generateChatCompletion, AITutorRole } from "@/utils/openai/chat";
 import { AIPDFUploaderComponent } from "@/components/teaching/pdf-uploader";
@@ -40,6 +43,7 @@ export default function TeachingPage() {
 
   // State for UI
   const [isPdfCollapsed, setIsPdfCollapsed] = useState(false);
+  const [showFeatureNotification, setShowFeatureNotification] = useState(true);
 
   // State for voice
   const [voiceEnabled, setVoiceEnabled] = useState(true);
@@ -235,8 +239,50 @@ Since the user is using voice mode, please optimize your response for spoken con
     setMessages([initialSystemMessage]);
   };
 
+  // Add useEffect to check localStorage for feature notification status
+  useEffect(() => {
+    // Check if user has already dismissed the notification
+    const notificationDismissed = localStorage.getItem(
+      "speechFeatureNotificationDismissed"
+    );
+    if (notificationDismissed === "true") {
+      setShowFeatureNotification(false);
+    }
+  }, []);
+
+  // Update dismissNotification function
+  const dismissNotification = () => {
+    setShowFeatureNotification(false);
+    // Save user preference in localStorage
+    localStorage.setItem("speechFeatureNotificationDismissed", "true");
+  };
+
   return (
-    <div className="flex flex-col h-screen bg-background">
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* New Feature Notification */}
+      {showFeatureNotification && (
+        <div className="bg-primary/10 border border-primary/20 rounded-md p-3 m-3 flex items-start">
+          <Info className="h-5 w-5 text-primary mr-2 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <h3 className="font-medium text-sm text-primary">
+              New Feature: Speech-to-Speech Conversations
+            </h3>
+            <p className="text-sm mt-1 text-muted-foreground">
+              You can now have fully voiced conversations with the AI tutor.
+              Click the <Repeat className="h-3 w-3 inline mx-0.5" /> icon in the
+              voice controls to enable speech-to-speech mode.
+            </p>
+          </div>
+          <button
+            onClick={dismissNotification}
+            className="text-muted-foreground hover:text-foreground"
+            aria-label="Dismiss notification"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <header className="p-4 border-b">
         <div className="flex justify-between items-center">
