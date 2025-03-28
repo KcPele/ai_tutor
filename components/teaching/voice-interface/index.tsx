@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Mic,
   MicOff,
@@ -9,7 +9,6 @@ import {
   Loader2,
   Settings,
   AlertOctagon,
-  Wifi,
   WifiOff,
   Repeat,
 } from "lucide-react";
@@ -273,6 +272,8 @@ export function AIVoiceInterfaceComponent({
     if (!text.trim() || isProcessing) return;
 
     setIsProcessing(true);
+    // Also set the waiting for response state to show the processing indicator
+    setIsWaitingForResponse(true);
 
     // Stop current speech synthesis if active
     if (speechSynthesisRef.current?.isSpeaking()) {
@@ -285,6 +286,8 @@ export function AIVoiceInterfaceComponent({
       console.error("Error processing speech", error);
     } finally {
       setIsProcessing(false);
+      // Note: We don't set isWaitingForResponse to false here because we want
+      // the indicator to stay visible until the AI response audio starts playing
     }
   };
 
@@ -350,6 +353,7 @@ export function AIVoiceInterfaceComponent({
         onTranscriptionComplete: (text) => {
           setLastTranscription(text);
           setIsRecording(false);
+          // Set waiting for response true here immediately after transcription is complete
           setIsWaitingForResponse(true);
 
           // Clear silence detection UI when transcription is complete
@@ -361,6 +365,7 @@ export function AIVoiceInterfaceComponent({
           }
         },
         onAIResponseStart: () => {
+          // Keep waitingForResponse true until audio starts playing
           if (onStartSpeaking) onStartSpeaking();
         },
         onAIResponseText: async (text) => {
@@ -372,6 +377,8 @@ export function AIVoiceInterfaceComponent({
           }
         },
         onAIResponseAudio: (audioUrl) => {
+          // Set waiting to false when audio is ready to play
+          setIsWaitingForResponse(false);
           setLastResponseAudio(audioUrl);
 
           if (audioRef.current) {
@@ -722,6 +729,38 @@ export function AIVoiceInterfaceComponent({
               <span>Processing your speech...</span>
             </>
           )}
+        </div>
+      )}
+
+      {/* Processing indicator overlay - shows when speech is being processed but AI hasn't responded yet */}
+      {isWaitingForResponse && !silenceDetectionActive && (
+        <div className="mt-1 p-2 bg-primary/5 border border-primary/10 rounded-md flex items-center justify-center">
+          <div className="flex flex-col items-center">
+            <div className="flex space-x-1 mb-1.5">
+              <div
+                className="w-2 h-2 rounded-full bg-primary/40 animate-bounce"
+                style={{ animationDelay: "0ms" }}
+              ></div>
+              <div
+                className="w-2 h-2 rounded-full bg-primary/60 animate-bounce"
+                style={{ animationDelay: "150ms" }}
+              ></div>
+              <div
+                className="w-2 h-2 rounded-full bg-primary/80 animate-bounce"
+                style={{ animationDelay: "300ms" }}
+              ></div>
+              <div
+                className="w-2 h-2 rounded-full bg-primary animate-bounce"
+                style={{ animationDelay: "450ms" }}
+              ></div>
+            </div>
+            <div className="text-xs font-medium text-primary/80">
+              Processing your question...
+            </div>
+            <div className="text-[10px] text-muted-foreground mt-1">
+              The AI tutor is preparing your response
+            </div>
+          </div>
         </div>
       )}
 

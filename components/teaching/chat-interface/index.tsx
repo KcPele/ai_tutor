@@ -274,6 +274,42 @@ export function AIChatInterfaceComponent({
     }
   };
 
+  // Function to enhance loading indicator under the latest message
+  const renderLoadingIndicator = () => {
+    // Only show if we're loading and not speaking
+    if (!isLoading || effectiveIsSpeaking) return null;
+
+    return (
+      <div className="flex justify-start">
+        <div className="max-w-[80%] rounded-lg p-3 bg-muted">
+          <div className="flex items-center space-x-2 mb-1">
+            <Bot className="h-4 w-4" />
+            <span className="text-sm font-medium">AI Tutor</span>
+          </div>
+          <div className="flex flex-col space-y-2">
+            <div className="flex space-x-1 items-center">
+              <div
+                className="animate-bounce h-2 w-2 bg-current rounded-full"
+                style={{ animationDelay: "0ms" }}
+              ></div>
+              <div
+                className="animate-bounce h-2 w-2 bg-current rounded-full"
+                style={{ animationDelay: "150ms" }}
+              ></div>
+              <div
+                className="animate-bounce h-2 w-2 bg-current rounded-full"
+                style={{ animationDelay: "300ms" }}
+              ></div>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Analyzing your question and preparing a response...
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className={`flex flex-col h-full ${className}`}>
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -352,21 +388,7 @@ export function AIChatInterfaceComponent({
           ))
         )}
 
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="max-w-[80%] rounded-lg p-3 bg-muted">
-              <div className="flex items-center space-x-2 mb-1">
-                <Bot className="h-4 w-4" />
-                <span className="text-sm font-medium">AI Tutor</span>
-              </div>
-              <div className="flex space-x-1 items-center h-6">
-                <div className="animate-bounce h-2 w-2 bg-current rounded-full delay-0"></div>
-                <div className="animate-bounce h-2 w-2 bg-current rounded-full delay-150"></div>
-                <div className="animate-bounce h-2 w-2 bg-current rounded-full delay-300"></div>
-              </div>
-            </div>
-          </div>
-        )}
+        {renderLoadingIndicator()}
 
         <div ref={messagesEndRef} />
       </div>

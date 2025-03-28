@@ -173,6 +173,7 @@ What would you like to learn about first?`,
       timestamp: Date.now(),
     };
 
+    // Set loading state immediately when message is sent
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
@@ -236,7 +237,7 @@ Since the user is using voice mode, please optimize your response for spoken con
       // Parse the JSON response
       const data = await response.json();
 
-      // Add AI response to chat
+      // Add AI response to chat and set loading to false
       const aiMessage: ChatMessage = {
         id: uuidv4(),
         role: "assistant",
@@ -245,6 +246,9 @@ Since the user is using voice mode, please optimize your response for spoken con
       };
 
       setMessages((prev) => [...prev, aiMessage]);
+
+      // When AI response is received, turn off the loading state
+      setIsLoading(false);
 
       // Extract potential whiteboard commands from the AI response
       if (whiteboardRef.current && data.content.includes("[writing]")) {
@@ -264,21 +268,50 @@ Since the user is using voice mode, please optimize your response for spoken con
       }
     } catch (error) {
       console.error("Error getting AI response:", error);
-    } finally {
+      // Ensure loading state is turned off on error
       setIsLoading(false);
     }
   };
 
   // Clear the chat
   const handleClearChat = () => {
+    if (!pdfInfo) return;
+
+    // Use the same comprehensive system prompt we use for initial loading
     const initialSystemMessage: ChatMessage = {
       id: uuidv4(),
       role: "system",
-      content: `PDF loaded: ${pdfInfo?.filename}`,
+      content: `
+TEACHING ASSISTANT INSTRUCTIONS:
+You are an AI teaching assistant that specializes in explaining educational content. You have been provided with a document titled "${pdfInfo?.title || pdfInfo?.filename}" which is ${pdfInfo?.numPages} pages long.
+
+YOUR PRIMARY RESPONSIBILITIES:
+1. Teach and explain the material in the document clearly and accurately
+2. Use the whiteboard to illustrate concepts when helpful (using [writing]...[/writing] tags)
+3. Answer questions specifically about the document content
+4. Maintain a helpful, encouraging teaching tone
+5. Break down complex concepts into understandable explanations
+6. Only teach about what is in the document or what is directly relevant
+
+DOCUMENT INFORMATION:
+- Title: ${pdfInfo?.title || pdfInfo?.filename}
+- Pages: ${pdfInfo?.numPages}
+- Type: PDF document
+
+The document has been analyzed and you should focus on teaching its content.
+`,
       timestamp: Date.now(),
     };
 
-    setMessages([initialSystemMessage]);
+    // Add a simple welcome back message
+    const welcomeBackMessage: ChatMessage = {
+      id: uuidv4(),
+      role: "assistant",
+      content: `I've cleared our previous conversation. What would you like to know about "${pdfInfo?.title || pdfInfo?.filename}"?`,
+      timestamp: Date.now(),
+    };
+
+    setMessages([initialSystemMessage, welcomeBackMessage]);
   };
 
   // Add useEffect to check localStorage for feature notification status
