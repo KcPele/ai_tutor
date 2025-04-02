@@ -1,4 +1,3 @@
-import { createClient } from "@/utils/supabase/server";
 import { BookOpen, GraduationCap, Settings } from "lucide-react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -12,21 +11,10 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useAccount } from "wagmi";
 
 export default async function ProtectedPage() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return redirect("/sign-in");
-  }
-
-  const userEmail = user.email || "User";
-  const userInitials = userEmail.substring(0, 2).toUpperCase();
-
+  const { address } = useAccount();
   return (
     <div className="flex-1 w-full flex flex-col gap-8 px-4 py-8 md:px-8 md:py-12 max-w-7xl mx-auto">
       {/* Header with welcome message and user info */}
@@ -42,15 +30,15 @@ export default async function ProtectedPage() {
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10 border-2 border-primary">
             <AvatarImage
-              src={`https://source.unsplash.com/random/200x200/?abstract&${user.id}`}
+              src={`https://source.unsplash.com/random/200x200/?abstract&${address}`}
               alt="Profile"
             />
             <AvatarFallback className="bg-primary text-primary-foreground">
-              {userInitials}
+              {address?.slice(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
           <div className="hidden md:block">
-            <p className="font-medium">{userEmail}</p>
+            <p className="font-medium">{address}</p>
             <p className="text-sm text-muted-foreground">Student</p>
           </div>
         </div>

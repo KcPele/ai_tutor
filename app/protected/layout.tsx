@@ -1,8 +1,7 @@
+"use client";
 import { ThemeSwitcher } from "@/components/theme-switcher";
-import { hasEnvVars } from "@/utils/supabase/check-env-vars";
 import Link from "next/link";
-import HeaderAuth from "@/components/header-auth";
-
+import { AIConnectWalletComponent } from "@/components/ai-connect-wallet-component";
 export default function ProtectedLayout({
   children,
 }: Readonly<{
@@ -42,7 +41,7 @@ export default function ProtectedLayout({
 
           <div className="flex items-center gap-4">
             <ThemeSwitcher />
-            {!hasEnvVars ? null : <HeaderAuth />}
+            <AIConnectWalletComponent variant="outline" size="sm" />
           </div>
         </div>
       </nav>

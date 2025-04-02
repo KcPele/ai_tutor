@@ -1,11 +1,7 @@
-import { ThemeSwitcher } from "@/components/theme-switcher";
-import { hasEnvVars } from "@/utils/supabase/check-env-vars";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
-import Link from "next/link";
 import "./globals.css";
-import HeaderAuth from "@/components/header-auth";
-import Script from "next/script";
+
 import { WalletProvider } from "@/providers/wallet-provider";
 
 const defaultUrl = process.env.VERCEL_URL

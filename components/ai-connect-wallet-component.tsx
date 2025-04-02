@@ -2,10 +2,8 @@
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Button } from "./ui/button";
-import { useAccount, useDisconnect } from "wagmi";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
-
 interface AIConnectWalletComponentProps {
   className?: string;
   variant?:
@@ -24,8 +22,6 @@ export function AIConnectWalletComponent({
   size = "default",
 }: AIConnectWalletComponentProps) {
   const [mounted, setMounted] = useState(false);
-  const { isConnected } = useAccount();
-  const { disconnect } = useDisconnect();
 
   useEffect(() => {
     setMounted(true);
