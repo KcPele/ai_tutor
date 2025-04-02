@@ -6,6 +6,7 @@ import Link from "next/link";
 import "./globals.css";
 import HeaderAuth from "@/components/header-auth";
 import Script from "next/script";
+import { WalletProvider } from "@/providers/wallet-provider";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -40,7 +41,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <main className="min-h-screen flex flex-col">{children}</main>
+          <WalletProvider>
+            <main className="min-h-screen flex flex-col">{children}</main>
+          </WalletProvider>
         </ThemeProvider>
       </body>
     </html>

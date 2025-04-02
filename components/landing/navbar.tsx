@@ -1,8 +1,8 @@
-import { hasEnvVars } from "@/utils/supabase/check-env-vars";
+"use client";
 import Link from "next/link";
-import HeaderAuth from "../header-auth";
 import React from "react";
 import { ThemeSwitcher } from "../theme-switcher";
+import { AIConnectWalletComponent } from "../ai-connect-wallet-component";
 
 const Navbar = () => {
   return (
@@ -43,7 +43,7 @@ const Navbar = () => {
 
         <div className="flex items-center gap-4">
           <ThemeSwitcher />
-          {!hasEnvVars ? null : <HeaderAuth />}
+          <AIConnectWalletComponent variant="outline" size="sm" />
         </div>
       </div>
     </nav>
