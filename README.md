@@ -75,6 +75,76 @@ bun run dev
 - **Authentication**: Supabase
 - **PDF Processing**: PDF.js
 - **Whiteboard**: Fabric.js
+- **Blockchain**: Solidity smart contracts
+
+## Smart Contracts
+
+The application utilizes several Solidity smart contracts to enable blockchain-based features. All contracts are implemented with Solidity version 0.8.28 and include comprehensive event logging for tracking on-chain activity.
+
+### SubscriptionManager
+
+Manages user subscription plans to access premium features of the AI Tutor.
+
+**Features:**
+
+- Plan creation and management for platform administrators
+- Subscription processing for users
+- Automatic renewal and expiration handling
+
+**Key Functions:**
+
+- `subscribe(uint8 _planId)`: Allows users to subscribe to a specific plan
+- `isSubscriptionActive(address _user)`: Checks if a user has an active subscription
+- `getSubscriptionStatus(address _user)`: Returns detailed subscription information
+
+### StudySessionLogger
+
+Logs and tracks user study sessions on the blockchain.
+
+**Features:**
+
+- Records start and end times of study sessions
+- Tracks materials studied and session durations
+- Maintains historical study data for analysis
+
+**Key Functions:**
+
+- `logSessionStart(string memory _materialId)`: Records the beginning of a study session
+- `getUserSessionCount(address _user)`: Returns the total number of sessions for a user
+- `getSessionsByMaterial(string memory _materialId)`: Retrieves all sessions for a specific study material
+
+### ContentFeedback
+
+Manages user feedback on learning content and materials.
+
+**Features:**
+
+- Allows users to submit ratings and text feedback
+- Enables rewarding users for valuable feedback
+- Maintains feedback history for course improvement
+
+**Key Functions:**
+
+- `submitFeedback(string memory _contentId, string memory _feedbackText, uint8 _rating)`: Records user feedback
+- `rewardFeedback(uint256 _feedbackId, uint256 _rewardAmount)`: Allows admins to reward helpful feedback
+- `getFeedbackDetails(uint256 _feedbackId)`: Retrieves complete feedback information
+
+### AchievementNFT
+
+Issues unique NFTs representing learning milestones or achievements within the AI Tutor App.
+
+**Features:**
+
+- ERC721-compliant achievement tokens
+- Custom achievement types with descriptions
+- On-chain verification of learning milestones
+
+**Key Functions:**
+
+- `addAchievementType(string memory _description)`: Creates new achievement categories
+- `awardAchievement(address _recipient, uint256 _achievementTypeId)`: Mints achievement NFTs to users
+- `getAchievementTypeDescription(uint256 _typeId)`: Retrieves achievement descriptions
+- `getTokenAchievementType(uint256 _tokenId)`: Returns the achievement type for a specific token
 
 ## License
 
