@@ -3,6 +3,8 @@ import { ThemeProvider } from "next-themes";
 import "./globals.css";
 
 import { WalletProvider } from "@/providers/wallet-provider";
+import { SubscriptionProvider } from "@/providers/subscription-provider";
+import { Toaster } from "@/components/ui/toaster";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -38,7 +40,10 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <WalletProvider>
-            <main className="min-h-screen flex flex-col">{children}</main>
+            <SubscriptionProvider>
+              <main className="min-h-screen flex flex-col">{children}</main>
+              <Toaster />
+            </SubscriptionProvider>
           </WalletProvider>
         </ThemeProvider>
       </body>

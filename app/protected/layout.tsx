@@ -2,11 +2,22 @@
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import Link from "next/link";
 import { AIConnectWalletComponent } from "@/components/ai-connect-wallet-component";
+import { useAccount } from "wagmi";
+import { redirect } from "next/navigation";
 export default function ProtectedLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const { isConnected, isConnecting } = useAccount();
+  if (!isConnected) {
+    redirect("/");
+  }
+
+  if (isConnecting) {
+    return <div>Connecting...</div>;
+  }
+
   return (
     <>
       {/* Navigation bar remains the same as the root layout */}

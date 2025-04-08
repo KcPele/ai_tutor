@@ -1,5 +1,12 @@
 "use client";
-import { BookOpen, GraduationCap, Settings } from "lucide-react";
+import {
+  BookOpen,
+  GraduationCap,
+  Settings,
+  Crown,
+  Check,
+  Loader2,
+} from "lucide-react";
 import Link from "next/link";
 import {
   Card,
@@ -12,9 +19,76 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAccount } from "wagmi";
+import { useSubscription } from "@/providers/subscription-provider";
+import { useEffect, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "@/hooks/use-toast";
 
-export default async function ProtectedPage() {
+export default function ProtectedPage() {
   const { address } = useAccount();
+  const {
+    isSubscriptionActive,
+    subscriptionStatus,
+    allPlans,
+    isLoadingAllPlans,
+    fetchAllPlans,
+    subscribeToPlan,
+    isSubscribing,
+  } = useSubscription();
+  const [subscribingPlanId, setSubscribingPlanId] = useState<number | null>(
+    null
+  );
+
+  // Fetch all plans on component mount
+  useEffect(() => {
+    fetchAllPlans();
+  }, [fetchAllPlans]);
+
+  // Handle subscription to a plan
+  const handleSubscribe = async (planId: number, price: string) => {
+    setSubscribingPlanId(planId);
+    try {
+      const { success, error } = await subscribeToPlan(planId, price);
+
+      if (success) {
+        toast({
+          title: "Subscription successful!",
+          description: "You have successfully subscribed to the plan.",
+          variant: "default",
+        });
+        // Refresh plans data
+        await fetchAllPlans();
+      } else {
+        toast({
+          title: "Subscription failed",
+          description:
+            error || "Failed to subscribe to the plan. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Subscription error",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSubscribingPlanId(null);
+    }
+  };
+
+  // Format expiry date
+  const formatExpiryDate = (timestamp: bigint) => {
+    if (!timestamp) return null;
+
+    const expiryDate = new Date(Number(timestamp) * 1000);
+    return expiryDate.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
   return (
     <div className="flex-1 w-full flex flex-col gap-8 px-4 py-8 md:px-8 md:py-12 max-w-7xl mx-auto">
       {/* Header with welcome message and user info */}
@@ -130,6 +204,149 @@ export default async function ProtectedPage() {
             <p className="text-2xl font-bold">0</p>
           </div>
         </div>
+      </div>
+
+      {/* Subscription Plans Section */}
+      <div className="mt-2 p-6 bg-muted/50 rounded-lg">
+        <div className="flex flex-col md:flex-row justify-between md:items-center gap-2 mb-4">
+          <h2 className="text-xl font-semibold">Subscription Plans</h2>
+          <div className="flex flex-col md:flex-row items-start md:items-center gap-2">
+            {isSubscriptionActive ? (
+              <>
+                <Badge
+                  variant="outline"
+                  className="bg-green-500/10 text-green-500 border-green-500"
+                >
+                  Active Subscription
+                </Badge>
+                {subscriptionStatus?.expiresAt && (
+                  <span className="text-sm text-muted-foreground">
+                    Expires on {formatExpiryDate(subscriptionStatus.expiresAt)}
+                  </span>
+                )}
+              </>
+            ) : (
+              <Badge
+                variant="outline"
+                className="bg-yellow-500/10 text-yellow-500 border-yellow-500"
+              >
+                No Active Subscription
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        {isLoadingAllPlans ? (
+          <div className="flex justify-center items-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <span className="ml-2 text-muted-foreground">
+              Loading subscription plans...
+            </span>
+          </div>
+        ) : !allPlans || allPlans.length === 0 ? (
+          <div className="text-center py-8 bg-background rounded-md">
+            <p className="text-muted-foreground">
+              No subscription plans available at the moment.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {allPlans.map((plan) => {
+              const isUserPlan = subscriptionStatus?.planId === plan.id;
+              const durationInDays = Number(plan.duration) / 86400; // Convert seconds to days
+              const isCurrentlySubscribing = subscribingPlanId === plan.id;
+
+              // Plan features based on plan ID
+              let planFeatures;
+              if (plan.id === 0) {
+                // Free plan
+                planFeatures = [
+                  "Access to your profile",
+                  "No PDF uploads",
+                  "1 demo test only",
+                ];
+              } else if (plan.id === 1) {
+                // Basic plan
+                planFeatures = [
+                  "Access to AI tutor (4 sessions)",
+                  "PDF uploads (15 documents)",
+                  "Premium learning features",
+                ];
+              } else {
+                // Pro plan (id === 2)
+                planFeatures = [
+                  "All Basic features",
+                  "Extended AI tutor (20 sessions)",
+                  "PDF uploads (34 documents)",
+                ];
+              }
+
+              return (
+                <Card
+                  key={plan.id}
+                  className={`transition-all ${
+                    isUserPlan
+                      ? "border-2 border-primary"
+                      : "hover:border-primary/50"
+                  }`}
+                >
+                  <CardHeader className="pb-2 relative">
+                    {isUserPlan && (
+                      <div className="absolute -top-2 -right-2">
+                        <Badge className="bg-primary text-primary-foreground">
+                          Your Plan
+                        </Badge>
+                      </div>
+                    )}
+                    <div className="p-2 w-fit rounded-full bg-purple-500/10 text-purple-500 mb-2">
+                      <Crown className="h-6 w-6" />
+                    </div>
+                    <CardTitle>{plan.name}</CardTitle>
+                    <CardDescription>
+                      {durationInDays} day{durationInDays !== 1 ? "s" : ""}{" "}
+                      subscription
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-3xl font-bold mb-4">
+                      {plan.formattedPrice} ETH
+                    </p>
+                    <ul className="space-y-2">
+                      {planFeatures.map((feature, index) => (
+                        <li key={index} className="flex items-start">
+                          <Check className="h-5 w-5 text-green-500 mr-2 shrink-0" />
+                          <span className="text-sm">{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                  <CardFooter>
+                    <Button
+                      variant={isUserPlan ? "outline" : "default"}
+                      className="w-full"
+                      disabled={!plan.isActive || isUserPlan || isSubscribing}
+                      onClick={() =>
+                        !isUserPlan &&
+                        handleSubscribe(plan.id, plan.formattedPrice)
+                      }
+                    >
+                      {isUserPlan ? (
+                        "Current Plan"
+                      ) : isCurrentlySubscribing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
+                          Subscribing...
+                        </>
+                      ) : (
+                        "Subscribe"
+                      )}
+                    </Button>
+                  </CardFooter>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
