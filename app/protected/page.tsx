@@ -1,5 +1,5 @@
+"use client";
 import { BookOpen, GraduationCap, Settings } from "lucide-react";
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
   Card,

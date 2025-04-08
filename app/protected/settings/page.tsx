@@ -1,10 +1,8 @@
-import { createClient } from "@/utils/supabase/server";
-import { redirect } from "next/navigation";
+"use client";
 import {
   Bell,
   CreditCard,
   Key,
-  Languages,
   Moon,
   Settings,
   Shield,
@@ -35,17 +33,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from "next/link";
 
 export default async function SettingsPage() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return redirect("/sign-in");
-  }
-
-  const userEmail = user.email || "User";
+  const userEmail = "User";
   const userInitials = userEmail.substring(0, 2).toUpperCase();
 
   // Mock subscription data - in a real app, this would come from a database
@@ -73,7 +61,7 @@ export default async function SettingsPage() {
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10 border-2 border-primary">
             <AvatarImage
-              src={`https://source.unsplash.com/random/200x200/?abstract&${user.id}`}
+              src={`https://source.unsplash.com/random/200x200/?abstract&${userEmail}`}
               alt="Profile"
             />
             <AvatarFallback className="bg-primary text-primary-foreground">
@@ -115,7 +103,7 @@ export default async function SettingsPage() {
                 <div className="flex items-center gap-4 mb-6">
                   <Avatar className="h-16 w-16 border-2 border-primary">
                     <AvatarImage
-                      src={`https://source.unsplash.com/random/200x200/?abstract&${user.id}`}
+                      src={`https://source.unsplash.com/random/200x200/?abstract&${userEmail}`}
                       alt="Profile"
                     />
                     <AvatarFallback className="bg-primary text-primary-foreground text-xl">

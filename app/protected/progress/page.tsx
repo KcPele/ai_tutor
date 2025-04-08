@@ -1,5 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
-import { redirect } from "next/navigation";
+"use client";
 import { Check, Clock, LineChart, CalendarDays, BookOpen } from "lucide-react";
 import {
   Card,
@@ -15,17 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default async function ProgressPage() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return redirect("/sign-in");
-  }
-
-  const userEmail = user.email || "User";
+  const userEmail = "User";
   const userInitials = userEmail.substring(0, 2).toUpperCase();
 
   // Mock data for progress visualization
@@ -58,7 +47,7 @@ export default async function ProgressPage() {
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10 border-2 border-primary">
             <AvatarImage
-              src={`https://source.unsplash.com/random/200x200/?abstract&${user.id}`}
+              src={`https://source.unsplash.com/random/200x200/?abstract&${userEmail}`}
               alt="Profile"
             />
             <AvatarFallback className="bg-primary text-primary-foreground">

@@ -1,13 +1,10 @@
-import { createClient } from "@/utils/supabase/server";
-import { redirect } from "next/navigation";
-import Link from "next/link";
+"use client";
 import {
   Book,
   CreditCard,
   Calendar,
   Clock,
   Medal,
-  User,
   MessageSquare,
   FileText,
   Edit,
@@ -27,22 +24,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
 export default async function ProfilePage() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return redirect("/sign-in");
-  }
-
-  const userEmail = user.email || "User";
-  const userInitials = userEmail.substring(0, 2).toUpperCase();
-
   // Mock data for user profile
   const userProfile = {
-    name: userEmail.split("@")[0] || "Student",
+    name: "John Doe",
     role: "Student",
     joinDate: "January 15, 2023",
     bio: "Passionate learner interested in artificial intelligence and data science.",
@@ -105,11 +89,11 @@ export default async function ProfilePage() {
           <div className="flex flex-col md:flex-row items-start md:items-end gap-4">
             <Avatar className="h-24 w-24 border-4 border-background">
               <AvatarImage
-                src={`https://source.unsplash.com/random/200x200/?abstract&${user.id}`}
+                src={`https://source.unsplash.com/random/200x200/?abstract&${userProfile.name}`}
                 alt="Profile"
               />
               <AvatarFallback className="bg-primary text-primary-foreground text-2xl">
-                {userInitials}
+                {userProfile.name.substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1">

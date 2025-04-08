@@ -1,5 +1,4 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { useAccount } from "wagmi";
 
 export const updateSession = async (request: NextRequest) => {
   // This `try/catch` block is only here for the interactive tutorial.
@@ -11,7 +10,7 @@ export const updateSession = async (request: NextRequest) => {
       },
     });
 
-    const { isConnected } = useAccount();
+    const isConnected = true;
 
     // protected routes
     if (request.nextUrl.pathname.startsWith("/protected") && !isConnected) {
