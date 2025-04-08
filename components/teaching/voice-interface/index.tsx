@@ -11,6 +11,7 @@ import {
   AlertOctagon,
   WifiOff,
   Repeat,
+  Speaker,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -62,9 +63,10 @@ export function AIVoiceInterfaceComponent({
   const [isOnline, setIsOnline] = useState(true);
   const [autoConversation, setAutoConversation] = useState(false);
   const [networkErrorCount, setNetworkErrorCount] = useState(0);
-  const [isSpeechToSpeechMode, setIsSpeechToSpeechMode] = useState(false);
+  const [isSpeechToSpeechMode, setIsSpeechToSpeechMode] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
+  const [isAIRespondingAudio, setIsAIRespondingAudio] = useState(false);
   const [lastTranscription, setLastTranscription] = useState("");
   const [lastResponseAudio, setLastResponseAudio] = useState<string | null>(
     null
@@ -102,8 +104,18 @@ export function AIVoiceInterfaceComponent({
 
     // Setup audio element
     audioRef.current = new Audio();
+    audioRef.current.onplay = () => {
+      // External hook for browser TTS compatibility (might not be needed for S2S)
+      // if (onStartSpeaking) onStartSpeaking();
+    };
     audioRef.current.onended = () => {
+      setIsAIRespondingAudio(false); // Stop speaking indicator when audio ends
+      // External hook for browser TTS compatibility (might not be needed for S2S)
       if (onStopSpeaking) onStopSpeaking();
+    };
+    audioRef.current.onerror = () => {
+      console.error("Audio playback error");
+      setIsAIRespondingAudio(false); // Stop speaking indicator on error
     };
 
     // Setup online/offline events
@@ -167,6 +179,9 @@ export function AIVoiceInterfaceComponent({
       // Configure silence detection (enabled by default for auto conversation mode)
       if (autoConversation) {
         speechServiceRef.current.setSilenceDetection(true, 20000); // 20 seconds timeout
+      } else {
+        // Disable silence detection if auto conversation is off
+        speechServiceRef.current.setSilenceDetection(false);
       }
     }
   }, [autoConversation]);
@@ -295,13 +310,15 @@ export function AIVoiceInterfaceComponent({
   const startSpeechToSpeech = async () => {
     if (!speechServiceRef.current || !voiceEnabled) return;
 
-    if (audioRef.current && lastResponseAudio) {
+    // Ensure any previous audio is stopped and resources released
+    if (audioRef.current) {
       audioRef.current.pause();
-      URL.revokeObjectURL(lastResponseAudio);
-      setLastResponseAudio(null);
+      if (lastResponseAudio) {
+        URL.revokeObjectURL(lastResponseAudio);
+        setLastResponseAudio(null);
+      }
     }
 
-    // Reset silence detection UI state
     setSilenceDetectionActive(false);
     setSilenceDetectionCountdown(null);
     if (silenceCountdownTimerRef.current) {
@@ -310,6 +327,8 @@ export function AIVoiceInterfaceComponent({
     }
 
     setIsRecording(true);
+    setIsWaitingForResponse(false); // Reset waiting state
+    setIsAIRespondingAudio(false); // Reset speaking state
     setErrorMessage(null);
 
     try {
@@ -324,18 +343,15 @@ export function AIVoiceInterfaceComponent({
         onTranscriptionStart: () => {
           setIsRecording(true);
           setIsWaitingForResponse(false);
+          setIsAIRespondingAudio(false); // Ensure speaking indicator is off
 
-          // If auto conversation is enabled, show silence detection is active
+          // Silence detection UI logic
           if (autoConversation) {
             setSilenceDetectionActive(true);
-            // Set initial countdown value to 20 seconds (matches the silence detection timeout)
             setSilenceDetectionCountdown(20);
-
-            // Start a visual countdown timer that updates every second
             if (silenceCountdownTimerRef.current) {
               clearInterval(silenceCountdownTimerRef.current);
             }
-
             silenceCountdownTimerRef.current = setInterval(() => {
               setSilenceDetectionCountdown((prev) => {
                 if (prev === null || prev <= 1) {
@@ -353,10 +369,11 @@ export function AIVoiceInterfaceComponent({
         onTranscriptionComplete: (text) => {
           setLastTranscription(text);
           setIsRecording(false);
-          // Set waiting for response true here immediately after transcription is complete
+          // Show processing indicator *after* recording stops
           setIsWaitingForResponse(true);
+          setIsAIRespondingAudio(false); // Ensure speaking is off
 
-          // Clear silence detection UI when transcription is complete
+          // Clear silence detection UI
           setSilenceDetectionActive(false);
           setSilenceDetectionCountdown(null);
           if (silenceCountdownTimerRef.current) {
@@ -366,35 +383,42 @@ export function AIVoiceInterfaceComponent({
         },
         onAIResponseStart: () => {
           // Keep waitingForResponse true until audio starts playing
-          if (onStartSpeaking) onStartSpeaking();
+          // External hook (maybe not needed here)
+          // if (onStartSpeaking) onStartSpeaking();
         },
         onAIResponseText: async (text) => {
-          // Pass the response text to the chat interface
+          // This happens *before* audio is ready. Update chat interface here.
           try {
+            // Pass the transcription and let the parent handle adding both user/AI messages
             await onSpeechRecognized(lastTranscription);
           } catch (error) {
             console.error("Error updating chat with transcription:", error);
           }
         },
         onAIResponseAudio: (audioUrl) => {
-          // Set waiting to false when audio is ready to play
+          // Audio is ready! Hide processing, show speaking indicator
           setIsWaitingForResponse(false);
+          setIsAIRespondingAudio(true); // <<< SET SPEAKING INDICATOR TRUE
           setLastResponseAudio(audioUrl);
 
           if (audioRef.current) {
             audioRef.current.src = audioUrl;
             audioRef.current.play().catch((error) => {
               console.error("Error playing audio:", error);
+              setIsAIRespondingAudio(false); // Turn off speaking indicator on error
             });
+          } else {
+            setIsAIRespondingAudio(false); // Turn off if audioRef is null
           }
         },
         onAIResponseComplete: () => {
-          setIsWaitingForResponse(false);
-          if (onStopSpeaking) onStopSpeaking();
+          // Audio playback finished naturally (onended handles setIsAIRespondingAudio(false))
+
+          // External hook (maybe not needed here)
+          // if (onStopSpeaking) onStopSpeaking();
 
           // Auto-restart if auto conversation is enabled
           if (autoConversation && speechServiceRef.current) {
-            // Small delay before starting next recording
             setTimeout(() => {
               startSpeechToSpeech();
             }, 1000);
@@ -407,8 +431,9 @@ export function AIVoiceInterfaceComponent({
           );
           setIsRecording(false);
           setIsWaitingForResponse(false);
+          setIsAIRespondingAudio(false); // Ensure all indicators are off on error
 
-          // Clear silence detection UI on error
+          // Clear silence detection UI
           setSilenceDetectionActive(false);
           setSilenceDetectionCountdown(null);
           if (silenceCountdownTimerRef.current) {
@@ -425,8 +450,9 @@ export function AIVoiceInterfaceComponent({
       setErrorMessage("Could not start speech conversation. Please try again.");
       setIsRecording(false);
       setIsWaitingForResponse(false);
+      setIsAIRespondingAudio(false); // Ensure all indicators are off on error
 
-      // Clear silence detection UI on error
+      // Clear silence detection UI
       setSilenceDetectionActive(false);
       setSilenceDetectionCountdown(null);
       if (silenceCountdownTimerRef.current) {
@@ -443,8 +469,9 @@ export function AIVoiceInterfaceComponent({
     speechServiceRef.current.cancelSpeechToSpeech();
     setIsRecording(false);
     setIsWaitingForResponse(false);
+    setIsAIRespondingAudio(false); // Turn off speaking indicator
 
-    // Clear silence detection UI when stopping
+    // Clear silence detection UI
     setSilenceDetectionActive(false);
     setSilenceDetectionCountdown(null);
     if (silenceCountdownTimerRef.current) {
@@ -452,7 +479,8 @@ export function AIVoiceInterfaceComponent({
       silenceCountdownTimerRef.current = null;
     }
 
-    if (audioRef.current && lastResponseAudio) {
+    // Pause any currently playing audio
+    if (audioRef.current) {
       audioRef.current.pause();
     }
   };
@@ -526,12 +554,15 @@ export function AIVoiceInterfaceComponent({
   // Handle mic button click
   const handleMicClick = () => {
     if (isSpeechToSpeechMode) {
-      if (isRecording || isWaitingForResponse) {
+      // If recording OR waiting for response OR AI is speaking, stop it all
+      if (isRecording || isWaitingForResponse || isAIRespondingAudio) {
         stopSpeechToSpeech();
       } else {
+        // Otherwise, start a new S2S cycle
         startSpeechToSpeech();
       }
     } else {
+      // Handle traditional STT
       if (isLocalListening) {
         stopListening();
       } else {
@@ -542,10 +573,11 @@ export function AIVoiceInterfaceComponent({
 
   // Calculate button states
   const micActive = isSpeechToSpeechMode
-    ? isRecording || isWaitingForResponse
-    : isLocalListening;
+    ? isRecording || isWaitingForResponse || isAIRespondingAudio // Mic stays "active" during processing and speaking in S2S
+    : isLocalListening; // Browser STT listening state
 
-  const showLoadingIndicator = isSpeechToSpeechMode
+  // Show loading in the mic button only when *actively* waiting/processing *before* audio starts
+  const showMicLoading = isSpeechToSpeechMode
     ? isWaitingForResponse
     : isProcessing || isRetrying;
 
@@ -553,18 +585,11 @@ export function AIVoiceInterfaceComponent({
   useEffect(() => {
     return () => {
       // Clean up speech services
-      if (speechRecognitionRef.current?.isCurrentlyListening()) {
-        speechRecognitionRef.current.stopListening();
-      }
+      stopListening();
       if (speechSynthesisRef.current?.isSpeaking()) {
         speechSynthesisRef.current.stop();
       }
-      if (speechServiceRef.current) {
-        speechServiceRef.current.cancelSpeechToSpeech();
-      }
-      if (audioRef.current && lastResponseAudio) {
-        URL.revokeObjectURL(lastResponseAudio);
-      }
+      stopSpeechToSpeech();
 
       // Clear silence detection timer
       if (silenceCountdownTimerRef.current) {
@@ -572,7 +597,7 @@ export function AIVoiceInterfaceComponent({
         silenceCountdownTimerRef.current = null;
       }
     };
-  }, [onStopSpeaking, lastResponseAudio]);
+  }, []); // Empty dependency array means this runs only on unmount
 
   return (
     <div className={cn("flex flex-col space-y-2", className)}>
@@ -592,19 +617,40 @@ export function AIVoiceInterfaceComponent({
           disabled={
             !voiceEnabled ||
             !isRecognitionSupported ||
-            (isSpeaking && !isSpeechToSpeechMode)
+            (isSpeaking && !isSpeechToSpeechMode) // Disable standard mic if browser TTS is active
           }
-          aria-label={micActive ? "Stop listening" : "Start listening"}
-          title={micActive ? "Stop listening" : "Start listening"}
+          aria-label={micActive ? "Stop interaction" : "Start listening"}
+          title={micActive ? "Stop interaction" : "Start listening"}
         >
-          {showLoadingIndicator ? (
+          {showMicLoading ? ( // Only show loader in mic button during processing phase
             <Loader2 className="h-4 w-4 animate-spin" />
-          ) : micActive ? (
+          ) : isRecording || isLocalListening ? ( // Show MicOff when actively recording/listening
             <MicOff className="h-4 w-4" />
           ) : (
-            <Mic className="h-4 w-4" />
+            <Mic className="h-4 w-4" /> // Show Mic icon otherwise
           )}
         </Button>
+
+        {/* ---- NEW: Status Indicators beside Mic ---- */}
+        <div className="flex items-center text-xs space-x-2 min-h-[1rem]">
+          {" "}
+          {/* Added min-h to prevent layout shift */}
+          {isSpeechToSpeechMode &&
+            isWaitingForResponse &&
+            !isAIRespondingAudio && (
+              <span className="text-primary flex items-center">
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                Processing...
+              </span>
+            )}
+          {isSpeechToSpeechMode && isAIRespondingAudio && (
+            <span className="text-green-600 flex items-center animate-pulse">
+              <Speaker className="h-3 w-3 mr-1" /> {/* Use Speaker icon */}
+              Tutor is speaking
+            </span>
+          )}
+        </div>
+        {/* ---- END NEW: Status Indicators ---- */}
 
         {/* Voice toggle button */}
         <Button
@@ -715,20 +761,11 @@ export function AIVoiceInterfaceComponent({
         )}
       </div>
 
-      {/* Status indicators */}
-      {isSpeechToSpeechMode && (isRecording || isWaitingForResponse) && (
+      {/* Detailed Status indicators below the controls */}
+      {isSpeechToSpeechMode && isRecording && (
         <div className="text-xs text-primary flex items-center animate-pulse">
-          {isRecording ? (
-            <>
-              <Mic className="h-3 w-3 mr-1.5" />
-              <span>Listening...</span>
-            </>
-          ) : (
-            <>
-              <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
-              <span>Processing your speech...</span>
-            </>
-          )}
+          <Mic className="h-3 w-3 mr-1.5" />
+          <span>Listening...</span>
         </div>
       )}
 
