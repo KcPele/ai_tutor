@@ -48,8 +48,15 @@ export default function LandingHero() {
                   size="lg"
                   variant="outline"
                   className="rounded-full font-medium"
+                  asChild
                 >
-                  See Demo
+                  <Link
+                    href="https://vimeo.com/1073727076/9c0a358a38"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    See Demo
+                  </Link>
                 </Button>
               </div>
             </div>
@@ -128,8 +135,15 @@ export default function LandingHero() {
                 size="lg"
                 variant="outline"
                 className="rounded-full font-medium"
+                asChild
               >
-                See Demo
+                <Link
+                  href="https://vimeo.com/1073727076/9c0a358a38"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  See Demo
+                </Link>
               </Button>
             </div>
           </div>

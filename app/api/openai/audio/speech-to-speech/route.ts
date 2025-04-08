@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import openai from "@/utils/openai/client";
 import { AITutorRole } from "@/utils/openai/chat";
 
+// Configure Edge runtime
+export const runtime = "edge";
+export const maxDuration = 30; // 30 seconds timeout
+
 export async function POST(request: NextRequest) {
   try {
     // Get form data from the request

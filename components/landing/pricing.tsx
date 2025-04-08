@@ -10,43 +10,39 @@ const plans = [
     name: "Free",
     price: "0",
     description: "Perfect for trying out the platform",
-    features: [
-      "3 PDF uploads per month",
-      "Basic AI tutoring",
-      "Standard whiteboard functionality",
-      "24-hour chat history",
-    ],
+    features: ["Access to your profile", "No PDF uploads", "1 demo test only"],
     cta: "Get Started",
     popular: false,
   },
   {
-    name: "Pro",
-    price: "19",
+    name: "Basic",
+    price: "0.01",
+    currency: "ETH",
     description: "For students serious about their education",
     features: [
-      "Unlimited PDF uploads",
-      "Advanced AI tutoring",
-      "Enhanced whiteboard interactions",
-      "Unlimited chat history",
-      "Priority support",
+      "Access to AI tutor (4 sessions)",
+      "PDF uploads (15 documents)",
+      "Premium learning features",
+      "24-hour chat history",
       "Study progress tracking",
     ],
-    cta: "Start Pro Plan",
+    cta: "Start Basic Plan",
     popular: true,
   },
   {
-    name: "Team",
-    price: "49",
-    description: "For educators and study groups",
+    name: "Pro",
+    price: "0.5",
+    currency: "ETH",
+    description: "For dedicated learners who need more resources",
     features: [
-      "Everything in Pro",
-      "Up to 5 user accounts",
-      "Collaborative whiteboards",
-      "Custom teaching materials",
+      "All Basic features",
+      "Extended AI tutor (20 sessions)",
+      "PDF uploads (34 documents)",
+      "Unlimited chat history",
+      "Priority support",
       "Advanced analytics",
-      "API access",
     ],
-    cta: "Contact Sales",
+    cta: "Start Pro Plan",
     popular: false,
   },
 ];
@@ -112,7 +108,11 @@ export default function Pricing() {
 
                   <div className="mb-6">
                     <div className="flex items-baseline">
-                      <span className="text-4xl font-bold">${plan.price}</span>
+                      <span className="text-4xl font-bold">
+                        {plan.price === "0"
+                          ? "Free"
+                          : `${plan.price} ${plan.currency || ""}`}
+                      </span>
                       {plan.price !== "0" && (
                         <span className="text-muted-foreground ml-2">
                           /month
@@ -227,7 +227,11 @@ export default function Pricing() {
 
                 <div className="mb-6">
                   <div className="flex items-baseline">
-                    <span className="text-4xl font-bold">${price}</span>
+                    <span className="text-4xl font-bold">
+                      {plan.price === "0"
+                        ? "Free"
+                        : `${plan.price} ${plan.currency || ""}`}
+                    </span>
                     {plan.price !== "0" && (
                       <span className="text-muted-foreground ml-2">
                         /{billingPeriod === "yearly" ? "year" : "month"}
@@ -236,7 +240,10 @@ export default function Pricing() {
                   </div>
                   {plan.price !== "0" && billingPeriod === "yearly" && (
                     <p className="text-sm text-emerald-500 mt-1">
-                      ${Math.round(parseInt(plan.price) * 12)} value
+                      {plan.currency
+                        ? `${(parseFloat(plan.price) * 12).toFixed(2)} ${plan.currency}`
+                        : `$${Math.round(parseInt(plan.price) * 12)}`}{" "}
+                      value
                     </p>
                   )}
                 </div>
