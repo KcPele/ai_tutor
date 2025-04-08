@@ -11,7 +11,7 @@ import {
 } from "@rainbow-me/rainbowkit";
 import "@rainbow-me/rainbowkit/styles.css";
 import { useTheme } from "next-themes";
-
+import { Web3Providers } from "./web3-providers";
 // Define chain directly to avoid possible circular imports
 const openCampusCodex = defineChain({
   id: 656476,
@@ -93,7 +93,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     <ClientOnly>
       <WagmiProvider config={config}>
         <QueryClientProvider client={queryClient}>
-          <RainbowKitProviderWithTheme>{children}</RainbowKitProviderWithTheme>
+          <RainbowKitProviderWithTheme>
+            <Web3Providers>{children}</Web3Providers>
+          </RainbowKitProviderWithTheme>
         </QueryClientProvider>
       </WagmiProvider>
     </ClientOnly>

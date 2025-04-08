@@ -9,6 +9,25 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
+/tutor_contract/flattened
+/tutor_contract/artifacts
+/tutor_contract/cache
+/tutor_contract/coverage
+/tutor_contract/coverage.json
+/tutor_contract/ignition
+/tutor_contract/typechain
+/tutor_contract/typechain-types
+
+# TypeChain files
+/typechain
+/typechain-types
+
+# solidity-coverage files
+/coverage
+/coverage.json
+
+# Hardhat Ignition default folder for deployments against a local node
+ignition/deployments/chain-31337
 
 # testing
 /coverage

@@ -52,11 +52,22 @@ bun run dev
 - **UI Components**: ShadCN/UI
 - **PDF Processing**: PDF.js
 - **Whiteboard**: Fabric.js
-- **Blockchain**: Solidity smart contracts
+- **Blockchain**: Solidity smart contracts on OpenCampus network
 
 ## Smart Contracts
 
 The application utilizes several Solidity smart contracts to enable blockchain-based features. All contracts are implemented with Solidity version 0.8.28 and include comprehensive event logging for tracking on-chain activity.
+
+### Deployed Contracts
+
+All contracts are deployed on the OpenCampus network (Chain ID: 656476):
+
+| Contract            | Address                                    | Explorer Link                                                                                                  |
+| ------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| SubscriptionManager | 0x6089425B0b0FA591ff0cd4AfCa937e92A51ac652 | [View on Explorer](https://opencampus-codex.blockscout.com/address/0x6089425B0b0FA591ff0cd4AfCa937e92A51ac652) |
+| StudySessionLogger  | 0x3D10A21cCfEE3d970a49d09b0562A7502c251991 | [View on Explorer](https://opencampus-codex.blockscout.com/address/0x3D10A21cCfEE3d970a49d09b0562A7502c251991) |
+| ContentFeedback     | 0x9B6D9a7a8d9c396ea5db88e7BD3e57b5adB929B3 | [View on Explorer](https://opencampus-codex.blockscout.com/address/0x9B6D9a7a8d9c396ea5db88e7BD3e57b5adB929B3) |
+| AchievementNFT      | 0x5DF906D043346bE3915DA2fC1Ff13B1E1092FAed | [View on Explorer](https://opencampus-codex.blockscout.com/address/0x5DF906D043346bE3915DA2fC1Ff13B1E1092FAed) |
 
 ### SubscriptionManager
 
@@ -122,6 +133,38 @@ Issues unique NFTs representing learning milestones or achievements within the A
 - `awardAchievement(address _recipient, uint256 _achievementTypeId)`: Mints achievement NFTs to users
 - `getAchievementTypeDescription(uint256 _typeId)`: Retrieves achievement descriptions
 - `getTokenAchievementType(uint256 _tokenId)`: Returns the achievement type for a specific token
+
+## Interacting with Contracts
+
+To interact with these contracts in your application:
+
+```javascript
+import { ethers } from "ethers";
+import {
+  SubscriptionManager_CONTRACT_ADDRESS,
+  SubscriptionManager_ABI,
+} from "../constants";
+
+// Example: Check if a user has an active subscription
+async function checkSubscription(userAddress) {
+  // Setup provider and contract
+  const provider = new ethers.providers.Web3Provider(window.ethereum);
+
+  // Load ABI dynamically
+  const abiData = await SubscriptionManager_ABI();
+
+  // Create contract instance
+  const subscriptionManager = new ethers.Contract(
+    SubscriptionManager_CONTRACT_ADDRESS,
+    abiData.abi,
+    provider
+  );
+
+  // Call contract method
+  const isActive = await subscriptionManager.isSubscriptionActive(userAddress);
+  return isActive;
+}
+```
 
 ## License
 
