@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
-
+import { useConnectModal } from "@rainbow-me/rainbowkit";
 export default function LandingHero() {
   const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
+  const { openConnectModal } = useConnectModal();
   // useEffect only runs on the client, to handle theme changes
   useEffect(() => {
     setMounted(true);
@@ -36,8 +37,12 @@ export default function LandingHero() {
                 an interactive whiteboard experience.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                <Button size="lg" className="rounded-full font-medium">
-                  Get Started
+                <Button
+                  onClick={() => openConnectModal?.()}
+                  size="lg"
+                  className="rounded-full font-medium"
+                >
+                  Connect Wallet to get started
                 </Button>
                 <Button
                   size="lg"
@@ -112,8 +117,12 @@ export default function LandingHero() {
               interactive whiteboard experience.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-              <Button size="lg" className="rounded-full font-medium">
-                Get Started
+              <Button
+                onClick={() => openConnectModal?.()}
+                size="lg"
+                className="rounded-full font-medium"
+              >
+                Connect Wallet to get started
               </Button>
               <Button
                 size="lg"
