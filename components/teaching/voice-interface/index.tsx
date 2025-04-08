@@ -369,7 +369,7 @@ export function AIVoiceInterfaceComponent({
         onTranscriptionComplete: (text) => {
           setLastTranscription(text);
           setIsRecording(false);
-          // Show processing indicator *after* recording stops
+          // Show processing indicator immediately after recording stops
           setIsWaitingForResponse(true);
           setIsAIRespondingAudio(false); // Ensure speaking is off
 
@@ -380,6 +380,9 @@ export function AIVoiceInterfaceComponent({
             clearInterval(silenceCountdownTimerRef.current);
             silenceCountdownTimerRef.current = null;
           }
+
+          // Set immediate visual feedback
+          console.log("Voice input received, processing...");
         },
         onAIResponseStart: () => {
           // Keep waitingForResponse true until audio starts playing
@@ -578,7 +581,7 @@ export function AIVoiceInterfaceComponent({
 
   // Show loading in the mic button only when *actively* waiting/processing *before* audio starts
   const showMicLoading = isSpeechToSpeechMode
-    ? isWaitingForResponse
+    ? isWaitingForResponse && !isAIRespondingAudio // Make sure loading shows during waiting state but not during speaking
     : isProcessing || isRetrying;
 
   // Cleanup on unmount
@@ -611,7 +614,8 @@ export function AIVoiceInterfaceComponent({
           className={cn(
             "h-9 w-9 rounded-full transition-all",
             micActive ? "bg-primary text-primary-foreground" : "",
-            !voiceEnabled || !isRecognitionSupported ? "opacity-50" : ""
+            !voiceEnabled || !isRecognitionSupported ? "opacity-50" : "",
+            isSpeechToSpeechMode && isWaitingForResponse ? "relative" : "" // Add relative position when processing
           )}
           onClick={handleMicClick}
           disabled={
@@ -629,6 +633,12 @@ export function AIVoiceInterfaceComponent({
           ) : (
             <Mic className="h-4 w-4" /> // Show Mic icon otherwise
           )}
+          {/* Extra processing indicator for emphasis */}
+          {isSpeechToSpeechMode &&
+            isWaitingForResponse &&
+            !isAIRespondingAudio && (
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full animate-ping opacity-75"></span>
+            )}
         </Button>
 
         {/* ---- NEW: Status Indicators beside Mic ---- */}
@@ -645,7 +655,7 @@ export function AIVoiceInterfaceComponent({
             )}
           {isSpeechToSpeechMode && isAIRespondingAudio && (
             <span className="text-green-600 flex items-center animate-pulse">
-              <Speaker className="h-3 w-3 mr-1" /> {/* Use Speaker icon */}
+              <Speaker className="h-3 w-3 mr-1" />
               Tutor is speaking
             </span>
           )}
@@ -769,37 +779,51 @@ export function AIVoiceInterfaceComponent({
         </div>
       )}
 
-      {/* Processing indicator overlay - shows when speech is being processed but AI hasn't responded yet */}
-      {isWaitingForResponse && !silenceDetectionActive && (
-        <div className="mt-1 p-2 bg-primary/5 border border-primary/10 rounded-md flex items-center justify-center">
-          <div className="flex flex-col items-center">
-            <div className="flex space-x-1 mb-1.5">
-              <div
-                className="w-2 h-2 rounded-full bg-primary/40 animate-bounce"
-                style={{ animationDelay: "0ms" }}
-              ></div>
-              <div
-                className="w-2 h-2 rounded-full bg-primary/60 animate-bounce"
-                style={{ animationDelay: "150ms" }}
-              ></div>
-              <div
-                className="w-2 h-2 rounded-full bg-primary/80 animate-bounce"
-                style={{ animationDelay: "300ms" }}
-              ></div>
-              <div
-                className="w-2 h-2 rounded-full bg-primary animate-bounce"
-                style={{ animationDelay: "450ms" }}
-              ></div>
-            </div>
-            <div className="text-xs font-medium text-primary/80">
-              Processing your question...
-            </div>
-            <div className="text-[10px] text-muted-foreground mt-1">
-              The AI tutor is preparing your response
-            </div>
+      {/* Processing indicator with more details */}
+      {isSpeechToSpeechMode && isWaitingForResponse && !isAIRespondingAudio && (
+        <div className="text-xs bg-primary/10 text-primary flex items-center p-2 rounded-md mt-1 border border-primary/20">
+          <div className="flex items-center justify-center space-x-1.5">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <span className="font-medium">
+              Processing your voice request...
+            </span>
           </div>
         </div>
       )}
+
+      {/* Processing indicator overlay for traditional mode */}
+      {isWaitingForResponse &&
+        !isSpeechToSpeechMode &&
+        !silenceDetectionActive && (
+          <div className="mt-1 p-2 bg-primary/5 border border-primary/10 rounded-md flex items-center justify-center">
+            <div className="flex flex-col items-center">
+              <div className="flex space-x-1 mb-1.5">
+                <div
+                  className="w-2 h-2 rounded-full bg-primary/40 animate-bounce"
+                  style={{ animationDelay: "0ms" }}
+                ></div>
+                <div
+                  className="w-2 h-2 rounded-full bg-primary/60 animate-bounce"
+                  style={{ animationDelay: "150ms" }}
+                ></div>
+                <div
+                  className="w-2 h-2 rounded-full bg-primary/80 animate-bounce"
+                  style={{ animationDelay: "300ms" }}
+                ></div>
+                <div
+                  className="w-2 h-2 rounded-full bg-primary animate-bounce"
+                  style={{ animationDelay: "450ms" }}
+                ></div>
+              </div>
+              <div className="text-xs font-medium text-primary/80">
+                Processing your question...
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-1">
+                The AI tutor is preparing your response
+              </div>
+            </div>
+          </div>
+        )}
 
       {/* Silence detection indicator */}
       {silenceDetectionActive && silenceDetectionCountdown !== null && (

@@ -385,11 +385,11 @@ The document has been analyzed and you should focus on teaching its content.
       </header>
 
       {/* Main content */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
         {/* PDF section */}
         <div
           className={`border-r ${
-            isPdfCollapsed ? "w-12" : "w-1/3"
+            isPdfCollapsed ? "w-full md:w-12" : "w-full md:w-1/3"
           } flex flex-col transition-all duration-300 ease-in-out`}
         >
           <div className="flex justify-between items-center p-2 border-b">
